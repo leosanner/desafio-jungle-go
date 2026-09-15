@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/leosanner/desafio-jungle-go/internal/adapter/postgres"
+	"github.com/leosanner/desafio-jungle-go/internal/app"
 	"github.com/leosanner/desafio-jungle-go/internal/config"
 
 	"go.uber.org/fx"
@@ -11,7 +12,10 @@ import (
 
 func postgresModule() fx.Option {
 	return fx.Module("postgres",
-		fx.Provide(postgres.NewPool),
+		fx.Provide(
+			postgres.NewPool,
+			fx.Annotate(postgres.NewUnitOfWork, fx.As(new(app.UnitOfWork))),
+		),
 		fx.Invoke(registerPostgres),
 	)
 }

@@ -5,6 +5,25 @@ import (
 	"testing"
 )
 
+func TestPinMigrationsTable(t *testing.T) {
+	t.Parallel()
+	got, err := pinMigrationsTable("pgx5://wagering:wagering@localhost:5432/wagering?sslmode=disable")
+	if err != nil {
+		t.Fatalf("pinMigrationsTable: %v", err)
+	}
+	if !strings.Contains(got, "x-migrations-table") {
+		t.Fatalf("expected pinned migrations table in %q", got)
+	}
+	already := `pgx5://localhost/db?x-migrations-table=custom`
+	got, err = pinMigrationsTable(already)
+	if err != nil {
+		t.Fatalf("pinMigrationsTable: %v", err)
+	}
+	if strings.Contains(got, "schema_migrations") {
+		t.Fatalf("should not override an explicit table: %q", got)
+	}
+}
+
 func TestPgx5DatabaseURL(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
