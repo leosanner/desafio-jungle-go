@@ -1,0 +1,13 @@
+.git
+.claude
+.cursor
+docs
+*.md
+.env
+.env.example
+.env.*
+docker-compose.yml
+docker
+bin
+coverage.*
+**/*_test.go
