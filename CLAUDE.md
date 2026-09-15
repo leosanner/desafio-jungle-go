@@ -79,6 +79,8 @@ migrate -path migrations -database "$POSTGRES_DSN" down 1
 
 ## Current state
 
-Phase 1 bootstrap is in place: layout, Fx composition, config, public health checks, migrate-on-start,
-Compose (PostgreSQL, Keycloak, LocalStack). **No domain code**, no wagering API, no auth on the app,
-no workers. Decisions: [ADR 0001](docs/adr/0001-package-layout-and-layer-boundaries.md)–[0005](docs/adr/0005-test-strategy-initial.md).
+Phase 2 domain is in place: `Money`, `Wallet`, ledger, `WagerTransaction` state machine, operation
+rules, domain events and unit tests (`internal/domain`). **No wagering API**, no auth on the app, no
+financial schema, no workers. Decisions: [ADR 0001](docs/adr/0001-package-layout-and-layer-boundaries.md)–[0005](docs/adr/0005-test-strategy-initial.md)
+(accepted); [0006](docs/adr/0006-money-representation.md)–[0008](docs/adr/0008-refund-rollback-combinations.md)
+(proposed). Next: Phase 3 persistence.

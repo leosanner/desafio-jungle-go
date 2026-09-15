@@ -7,7 +7,7 @@ decisions made. The order prioritizes the highest-weighted criteria (§14) and m
 | --- | --- | --- | --- |
 | 0 | Repository structure, docs and agent skills | — | ✅ |
 | 1 | Bootstrap: `go.mod`, package layout, config, base Fx, health checks, Dockerfile, Compose (PG, Keycloak, LocalStack), empty migrations, local checks (`vet`, `gofmt`, `-race`) | STK, FX, HTTP-13 | ✅ |
-| 2 | Pure domain: `Money`, `Wallet`, `WagerTransaction`, `WalletLedgerEntry`, errors and events, with unit tests | MON, WAL, WTX, LED, DOM, TST-01..03 | — |
+| 2 | Pure domain: `Money`, `Wallet`, `WagerTransaction`, `WalletLedgerEntry`, errors and events, with unit tests | MON, WAL, WTX, LED, DOM, TST-01..03 | ✅ |
 | 3 | Persistence: schema with constraints, ledger immutability, unit of work, repositories | GAR-03/05/07/08, TST-04 | — |
 | 4 | Authentication and authorization with Keycloak | AUTH, TST-07 | — |
 | 5 | HTTP use cases: opening, operations, idempotency, reads, reconciliation | HTTP, OPS, CON | — |

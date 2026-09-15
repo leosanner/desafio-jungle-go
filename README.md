@@ -3,9 +3,8 @@
 Go + Uber Fx service that processes financial operations from game providers via HTTP and SQS, backed by
 PostgreSQL, Keycloak and LocalStack. Full challenge statement (in Portuguese) in [`init.md`](init.md).
 
-> Phase 1 bootstrap: process skeleton, public health checks, migrate-on-start, Compose dependencies.
-> There is **no wagering API** and **no authentication** yet. Keycloak is started but unused by the app.
-> See [`docs/roadmap.md`](docs/roadmap.md).
+> Phase 2: process skeleton plus a pure domain model. There is **no wagering API** and **no authentication**
+> yet. Keycloak is started but unused by the app. See [`docs/roadmap.md`](docs/roadmap.md).
 
 ## Prerequisites
 

@@ -14,11 +14,12 @@ content grows; this README keeps the index and shared conventions.
 - `Idempotency-Key` rules, canonical hash algorithm and normalizations.
 - Ledger pagination (opaque cursor, ordering, limits).
 
-Phase 1 only documents public health checks. Wagering and wallet contracts, error catalog and
-idempotency rules remain TBD.
+Phase 2 documents the domain `failureCode` catalog. HTTP status mapping and wagering routes remain
+TBD until the HTTP phase.
 
 ## Index
 
 | Document | Endpoints |
 | --- | --- |
 | [health.md](health.md) | `GET /health/live`, `GET /health/ready` (public, unauthenticated) |
+| [failure-codes.md](failure-codes.md) | Domain `failureCode` catalog (HTTP mapping later) |

@@ -29,7 +29,8 @@ count, `MessageGroupId`, `MessageDeduplicationId` and payload contracts are **TB
 - Common envelope: `eventId`, `eventType`, `aggregateId`, `correlationId`, `causationId`, `occurredAt`,
   `version`, `data`.
 - Typed payload for each event: `WagerTransactionProcessed`, `WagerTransactionRejected`,
-  `WalletBalanceChanged`, `WagerTransactionPendingReference`.
+  `WalletBalanceChanged`, `WagerTransactionPendingReference` — types in
+  [`outbox-events.md`](outbox-events.md); routing still TBD.
 - Provisioned destination, routing, ordering and consumer guarantees (at-least-once, dedup by `eventId`).
 - Event versioning policy.
 
@@ -38,4 +39,5 @@ count, `MessageGroupId`, `MessageDeduplicationId` and payload contracts are **TB
 | Document | Messages |
 | --- | --- |
 | This README | Queue names `wager-transactions.fifo`, `wager-transactions-dlq.fifo` (provisioned) |
-| _payload contracts to be created_ | `WagerTransactionRequested` and outbox events |
+| [outbox-events.md](outbox-events.md) | Domain event types (`WagerTransactionProcessed`, `Rejected`, `WalletBalanceChanged`, `PendingReference`) |
+| _payload contracts to be created_ | Inbound `WagerTransactionRequested` envelope and outbox routing |
