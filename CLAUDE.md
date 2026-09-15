@@ -74,13 +74,15 @@ migrate -path migrations -database "$POSTGRES_DSN" down 1
 
 - Default `go test ./...` is unit tests only (no containers). `-tags=integration` is for real
   PostgreSQL / Keycloak / LocalStack when those tests exist ([ADR 0005](docs/adr/0005-test-strategy-initial.md)).
+  TST-04 postgres tests need `POSTGRES_DSN` only (Keycloak/SQS not required).
 - The app applies migrations **Up** on start. Rollback is CLI-only (not on shutdown).
 - Health: `curl -sS http://localhost:8080/health/live` and `/health/ready` (port from `HTTP_ADDR`).
 
 ## Current state
 
-Phase 2 domain is in place: `Money`, `Wallet`, ledger, `WagerTransaction` state machine, operation
-rules, domain events and unit tests (`internal/domain`). **No wagering API**, no auth on the app, no
-financial schema, no workers. Decisions: [ADR 0001](docs/adr/0001-package-layout-and-layer-boundaries.md)–[0005](docs/adr/0005-test-strategy-initial.md)
-(accepted); [0006](docs/adr/0006-money-representation.md)–[0008](docs/adr/0008-refund-rollback-combinations.md)
-(proposed). Next: Phase 3 persistence.
+Phase 3 persistence is in place: financial schema (`migrations/000002_financial_schema`), application
+ports (`UnitOfWork`, repositories), `pgx` adapters, and per-wallet `SELECT ... FOR UPDATE`. Domain
+from Phase 2 remains (`internal/domain`). **No wagering API**, no auth on the app, no workers.
+Decisions: [ADR 0001](docs/adr/0001-package-layout-and-layer-boundaries.md)–[0005](docs/adr/0005-test-strategy-initial.md)
+(accepted); [0006](docs/adr/0006-money-representation.md)–[0010](docs/adr/0010-per-wallet-concurrency.md)
+(proposed). Next: Phase 4 authentication.

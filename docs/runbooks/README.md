@@ -10,8 +10,8 @@ Each runbook must include: prerequisites, exact commands, expected outcome and h
 
 | Runbook | Scenario | Status |
 | --- | --- | --- |
-| [test-dependencies.md](test-dependencies.md) | Start PostgreSQL, Keycloak and LocalStack/MiniStack for tests | 🚧 Phase 1 (start/ready; integration tests later) |
-| _to be created_ — integration tests | Build tags and commands | — |
+| [test-dependencies.md](test-dependencies.md) | Start PostgreSQL, Keycloak and LocalStack/MiniStack for tests | 🚧 Phase 3 (TST-04 needs Postgres only) |
+| [integration.md](integration.md) | Build tags and TST-04 command (`POSTGRES_DSN`) | 🚧 |
 | _to be created_ — multiple instances | ≥3 contending processes | — |
 | _to be created_ — failure simulation | Crash after commit, between publish and ack, PG/SQS unavailability | — |
 | _to be created_ — pending references | Reversal before its reference, resolution and expiry | — |

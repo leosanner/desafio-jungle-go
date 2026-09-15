@@ -5,10 +5,11 @@
 
 ## Overview
 
-Phase 2 of a Go + Uber Fx wagering service: hexagonal layout, stdlib HTTP health checks,
-PostgreSQL via `pgx`, golang-migrate, LocalStack SQS queues, and a **pure domain model** (`Money`,
-`Wallet`, `WagerTransaction`, ledger, operations, events). There is still no wagering HTTP API,
-authentication on business routes, persistence of financial tables, or background workers.
+Phase 3 of a Go + Uber Fx wagering service: hexagonal layout, stdlib HTTP health checks,
+PostgreSQL via `pgx`, golang-migrate, LocalStack SQS queues, a **pure domain model** (`Money`,
+`Wallet`, `WagerTransaction`, ledger, operations, events), and **financial persistence** (schema,
+repositories, unit of work, per-wallet locking). There is still no wagering HTTP API,
+authentication on business routes, or background workers.
 
 - Module: `github.com/leosanner/desafio-jungle-go` ([ADR 0001](docs/adr/0001-package-layout-and-layer-boundaries.md))
 - Go 1.25, `net/http` ServeMux, `log/slog` JSON ([ADR 0002](docs/adr/0002-go-version-and-http-router.md))
@@ -41,7 +42,8 @@ External parse rejects anything that is not a non-negative `digits.dd` string (n
 JSON `amount` is a string; numeric JSON is rejected so nothing goes through float. Overflow on
 parse/add/subtract/negate is an error. Negative amounts exist only for internal differences.
 
-**Persistence (Phase 3):** `BIGINT` minor units + currency column. Not migrated yet.
+**Persistence (Phase 3):** `BIGINT` minor units + currency column
+([ADR 0006](docs/adr/0006-money-representation.md)).
 
 ## Persistence and transactions
 
@@ -49,17 +51,33 @@ parse/add/subtract/negate is an error. Negative amounts exist only for internal 
 API. **sqlc** is not used in Phase 1 (optional later, not chosen).
 
 **Migrations (accepted):** golang-migrate v4, SQL files in `migrations/` with up and down.
-Baseline `000001_bootstrap` creates schema `wagering` only. The app runs migrate Up on start from
-`MIGRATIONS_PATH`. Rollback is a CLI operation, not automatic on shutdown.
+Baseline `000001_bootstrap` creates schema `wagering`. `000002_financial_schema` adds `wallets`,
+`wager_transactions`, `wallet_ledger_entries` (BIGINT minor units, uniqueness/check constraints,
+append-only ledger trigger). The app runs migrate Up on start from `MIGRATIONS_PATH`. Rollback is a
+CLI operation, not automatic on shutdown.
 
 [ADR 0003](docs/adr/0003-database-access-and-migrations.md).
 
-**Still TBD:** SQL transaction boundary across repositories (unit of work). Money mapping is
-proposed as `BIGINT` cents in [ADR 0006](docs/adr/0006-money-representation.md) (schema in Phase 3).
+**Money mapping (proposed):** PostgreSQL `BIGINT` cents plus a currency column, matching domain
+`int64` minor units ([ADR 0006](docs/adr/0006-money-representation.md)).
+
+**Unit of work (proposed):** [ADR 0009](docs/adr/0009-sql-unit-of-work.md). Application ports
+`UnitOfWork` and repositories; `Within(ctx, func(ctx, Repositories) error)` opens one `pgx.Tx`,
+injects tx-scoped repos, commits on `nil`, rolls back on error or panic. Repositories never begin
+their own transactions. Inbox/outbox are not in this phase; `Repositories` must accept them later
+on the same commit. Unique/check/lock errors map by `SQLSTATE` to classifiable errors
+(`errors.Is`), never by message string. Financial reads that decide a debit or credit run inside
+the same `Within`.
 
 ## Concurrency and locking
 
-Per-wallet strategy, lost update prevention, behavior with multiple instances. — _TBD_
+**Proposed:** [ADR 0010](docs/adr/0010-per-wallet-concurrency.md). Pessimistic
+`SELECT ... FOR UPDATE` on the wallet row inside the unit-of-work transaction, in-memory mutate,
+then `UPDATE ... WHERE id = $1 AND version = $2`. Zero rows on that UPDATE is an invariant
+failure, not a silent retry. No global mutex, no session advisory lock on a constant, no table
+lock, no in-memory lock map. Independent wallets proceed in parallel; N instances share PostgreSQL
+row locks. `CHECK (balance_minor >= 0)` is a last line of defense. Optimistic-only version retries
+are rejected as the primary strategy.
 
 ## Idempotency
 
@@ -131,13 +149,20 @@ Correlation IDs on every business log line, metrics and tracing — _TBD_
 
 ## Limitations, interpretations and unfinished work
 
-Phase 2 adds a pure domain (no I/O). Still unfinished:
+Phase 3 has financial schema (`000002_financial_schema`), repositories, unit of work and per-wallet
+locking. Still unfinished:
 
-- No wagering HTTP API, auth on business routes, financial schema, unit of work or workers.
-- ADRs 0006–0008 are **Proposed** until confirmed.
-- STK-05 remains open until the money `BIGINT` migration and unit of work land.
-- Integration tests with real containers, multi-instance runs and failure injection are specified
-  ([ADR 0005](docs/adr/0005-test-strategy-initial.md)) but not delivered yet.
+- No wagering HTTP API, auth on business routes, or workers.
+- ADRs 0006–0010 are **Proposed** until confirmed.
+- STK-05 is documented and implemented: `pgx/v5` ([ADR 0003](docs/adr/0003-database-access-and-migrations.md)),
+  `BIGINT` minor units ([ADR 0006](docs/adr/0006-money-representation.md), migration `000002`),
+  unit of work ([ADR 0009](docs/adr/0009-sql-unit-of-work.md)).
+- Inbox/outbox persistence remains later (same `Repositories` / `Within` pattern).
+- TST-04 is covered by `-tags=integration` tests in `internal/adapter/postgres`
+  (`TestMigrationsUpAndDown`, `TestFinancialSchemaConstraints`, `TestLedgerAppendOnly`,
+  `TestUnitOfWorkAtomicity`, `TestConcurrentBetsSerializePerWallet`). They need `POSTGRES_DSN`
+  only. Multi-instance runs and failure injection remain later
+  ([ADR 0005](docs/adr/0005-test-strategy-initial.md)).
 - Keycloak is provisioned and unused by the app. Health endpoints stay public.
 
 Interpretations: migrate Up on process start; rollback is operator-driven via CLI; default

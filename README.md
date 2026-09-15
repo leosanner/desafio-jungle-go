@@ -3,8 +3,9 @@
 Go + Uber Fx service that processes financial operations from game providers via HTTP and SQS, backed by
 PostgreSQL, Keycloak and LocalStack. Full challenge statement (in Portuguese) in [`init.md`](init.md).
 
-> Phase 2: process skeleton plus a pure domain model. There is **no wagering API** and **no authentication**
-> yet. Keycloak is started but unused by the app. See [`docs/roadmap.md`](docs/roadmap.md).
+> Phase 3: process skeleton, pure domain model, and **financial persistence** (schema `000002`,
+> repositories, unit of work). There is **no wagering API** and **no authentication** yet. Keycloak is
+> started but unused by the app. See [`docs/roadmap.md`](docs/roadmap.md).
 
 ## Prerequisites
 
@@ -64,13 +65,17 @@ LocalStack is provisioned with two FIFO queues and redrive from the main queue t
 | `wager-transactions.fifo` | Inbound wager operations (`SQS_WAGER_QUEUE_NAME`) |
 | `wager-transactions-dlq.fifo` | Dead-letter queue (`SQS_WAGER_DLQ_NAME`) |
 
-The Phase 1 process **does not consume** these queues. It only uses SQS for readiness (queue exists /
+The process **does not consume** these queues. It only uses SQS for readiness (queue exists /
 reachable). Message contracts: [`docs/events/README.md`](docs/events/README.md).
 
 ## Migrations
 
-The app applies golang-migrate **Up** on start from `MIGRATIONS_PATH`. Phase 1 baseline
-`000001_bootstrap` creates schema `wagering` only (no financial tables yet).
+The app applies golang-migrate **Up** on start from `MIGRATIONS_PATH`.
+
+| Version | What it creates |
+| --- | --- |
+| `000001_bootstrap` | Schema `wagering` |
+| `000002_financial_schema` | `wallets`, `wager_transactions`, `wallet_ledger_entries` (BIGINT minor units, uniqueness/check constraints, append-only ledger trigger) |
 
 Rollback is **not** run on shutdown. Using the [golang-migrate CLI](https://github.com/golang-migrate/migrate):
 
@@ -84,7 +89,7 @@ See [ADR 0003](docs/adr/0003-database-access-and-migrations.md).
 
 ## Authentication and test identities
 
-Not used in Phase 1. Health endpoints are public. Keycloak is up for later phases; provisioning of
+Not used in Phase 3. Health endpoints are public. Keycloak is up for later phases; provisioning of
 realms, clients and test users will be documented when authentication is implemented.
 
 ## Example calls
@@ -114,16 +119,24 @@ go vet ./...
 gofmt -l .
 ```
 
-`gofmt -l .` must print nothing. Integration tests use build tag `integration` and real PostgreSQL,
-Keycloak and LocalStack; they are not fully implemented in Phase 1. When they exist:
+`gofmt -l .` must print nothing.
+
+Integration tests use build tag `integration`. They skip if required env is unset (`skip-if-no-env`).
+That skip is not a substitute for CI with real containers.
+
+**TST-04** (postgres migrations, constraints, ledger immutability, financial atomicity) needs
+`POSTGRES_DSN` only. Keycloak and SQS are not required:
 
 ```sh
+docker compose up -d postgres
+set -a && source .env.example && set +a
 go test -tags=integration ./...
 ```
 
-Strategy: [ADR 0005](docs/adr/0005-test-strategy-initial.md). Starting dependencies:
-[`docs/runbooks/test-dependencies.md`](docs/runbooks/test-dependencies.md). Multi-instance and failure
-simulation runbooks are placeholders until later phases.
+How to run TST-04: [`docs/runbooks/integration.md`](docs/runbooks/integration.md). Starting
+dependencies: [`docs/runbooks/test-dependencies.md`](docs/runbooks/test-dependencies.md). Strategy:
+[ADR 0005](docs/adr/0005-test-strategy-initial.md). Multi-instance and failure simulation runbooks
+are placeholders until later phases.
 
 ## Documentation
 

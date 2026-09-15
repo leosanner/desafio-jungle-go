@@ -1,8 +1,11 @@
 # Test dependencies
 
-Start the infrastructure the challenge requires for later integration tests: PostgreSQL, Keycloak
-(OIDC) and LocalStack (SQS). Phase 1 does **not** ship a full `-tags=integration` suite
-([ADR 0005](../adr/0005-test-strategy-initial.md)).
+Start the infrastructure the challenge requires: PostgreSQL, Keycloak (OIDC) and LocalStack (SQS).
+Default `go test ./...` does not need these containers ([ADR 0005](../adr/0005-test-strategy-initial.md)).
+
+**TST-04** (postgres migrations, constraints, ledger immutability, financial atomicity) needs
+PostgreSQL and `POSTGRES_DSN` only. Keycloak and SQS are not required for that slice. See
+[`integration.md`](integration.md).
 
 ## Prerequisites
 
@@ -23,16 +26,22 @@ Dependencies only (typical when running `go test` / `go run ./cmd/wagering` on t
 docker compose up -d postgres keycloak localstack
 ```
 
+Postgres only (enough for TST-04):
+
+```sh
+docker compose up -d postgres
+```
+
 Service names must match `docker-compose.yml`. If Compose uses different service names, use those.
 
 ## Ports (host)
 
-Published ports are defined in `docker-compose.yml` and `.env.example`. The usual Phase 1 mapping:
+Published ports are defined in `docker-compose.yml` and `.env.example`. The usual mapping:
 
 | Service | Host port | What “ready” means |
 | --- | --- | --- |
 | PostgreSQL | `5432` | Accepts connections with `POSTGRES_DSN` (e.g. `pg_isready` or `psql "$POSTGRES_DSN" -c 'select 1'`) |
-| Keycloak | `8081` | Admin console at `http://localhost:8081` (app **does not** call Keycloak in Phase 1) |
+| Keycloak | `8081` | Admin console at `http://localhost:8081` (app **does not** call Keycloak in Phase 3) |
 | LocalStack | `4566` | SQS `GetQueueUrl` succeeds for `wager-transactions.fifo` and `wager-transactions-dlq.fifo` |
 | wagering (when started via Compose) | from `HTTP_ADDR` (often `8080`) | `GET /health/ready` returns `200` |
 
@@ -44,9 +53,10 @@ docker compose ps
 
 ## How to know they are ready
 
-1. `docker compose ps` shows the three dependency services as running (and healthy, if healthchecks exist).
-2. PostgreSQL: `psql "$POSTGRES_DSN" -c 'select 1'` (schema `wagering` appears after the **app** has
-   applied migrations, not necessarily when Postgres first accepts connections).
+1. `docker compose ps` shows the services you started as running (and healthy, if healthchecks exist).
+2. PostgreSQL: `psql "$POSTGRES_DSN" -c 'select 1'` (schema `wagering` and financial tables appear
+   after the **app** has applied migrations `000001` and `000002`, not necessarily when Postgres first
+   accepts connections). Tagged postgres tests apply migrations themselves when they run.
 3. LocalStack: AWS CLI against `AWS_ENDPOINT_URL` (dummy keys are fine):
 
    ```sh
@@ -56,18 +66,20 @@ docker compose ps
      --queue-name wager-transactions-dlq.fifo
    ```
 
-4. Keycloak: open the host URL from Compose; unused by the Phase 1 process.
+4. Keycloak: open the host URL from Compose; unused by the Phase 3 process.
 5. App: [`docs/api/health.md`](../api/health.md) — live `200`, ready `200` only when Postgres and SQS pass.
 
-## Integration tests (later)
+## Integration tests
 
 ```sh
 go test -tags=integration ./...
 ```
 
-Until those tests exist, optional tests may skip when env/containers are missing. That skip is not
-a substitute for real-container CI. Multi-instance and failure-injection procedures are separate
-runbooks (not written yet).
+Tests skip when required env is missing (`skip-if-no-env`). That skip is not a substitute for
+real-container CI. TST-04 (`./internal/adapter/postgres/...`) skips without `POSTGRES_DSN` and does
+not need Keycloak or LocalStack. See [integration.md](integration.md).
+
+Multi-instance and failure-injection procedures are separate runbooks (not written yet).
 
 ## Stop
 
