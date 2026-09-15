@@ -1,0 +1,27 @@
+# Binaries and test artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+/bin/
+/wagering
+coverage.*
+
+# Go workspace
+go.work
+go.work.sum
+
+# Vendoring (not used)
+vendor/
+
+# Local env (keep .env.example)
+.env
+.env.local
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
