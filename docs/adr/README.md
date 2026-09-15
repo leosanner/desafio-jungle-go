@@ -17,6 +17,8 @@ Accepted ADRs are not rewritten: a change of direction creates a new ADR that su
 | [0006](0006-money-representation.md) | Money representation | Proposed |
 | [0007](0007-wager-transaction-state-machine.md) | WagerTransaction state machine | Proposed |
 | [0008](0008-refund-rollback-combinations.md) | REFUND and ROLLBACK combinations | Proposed |
+| [0009](0009-sql-unit-of-work.md) | SQL unit of work / transaction boundary | Proposed |
+| [0010](0010-per-wallet-concurrency.md) | Per-wallet concurrency | Proposed |
 
 ## Pending decisions
 
@@ -26,8 +28,8 @@ Decisions the challenge requires documenting that don't have an ADR yet:
 - [x] Go version and HTTP router
 - [x] Database access library (`pgx`, `sqlc`...) and migration tool
 - [x] `Money` representation (`int64` minor units) — [ADR 0006](0006-money-representation.md) (Proposed); schema mapping lands in Phase 3
-- [ ] SQL transaction boundary across repositories (unit of work)
-- [ ] Per-wallet concurrency strategy (pessimistic × optimistic × conditional update)
+- [x] SQL transaction boundary across repositories (unit of work) — [ADR 0009](0009-sql-unit-of-work.md) (Proposed)
+- [x] Per-wallet concurrency strategy (pessimistic × optimistic × conditional update) — [ADR 0010](0010-per-wallet-concurrency.md) (Proposed)
 - [ ] Idempotency: key scope, hash algorithm, canonical JSON and normalizations (conflict rules exist in domain)
 - [x] `WagerTransaction` state machine and transient × permanent failure classification — [ADR 0007](0007-wager-transaction-state-machine.md) (Proposed)
 - [ ] Pending references: backoff, max attempts/TTL (wait vs unsuccessful reference is in ADR 0007)
