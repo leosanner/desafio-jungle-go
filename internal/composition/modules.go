@@ -24,6 +24,7 @@ func Modules() fx.Option {
 		sqsModule(),
 		authModule(),
 		wageringModule(),
+		outboxModule(),
 		httpModule(),
 	)
 }

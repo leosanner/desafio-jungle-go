@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -100,7 +101,7 @@ type LedgerRepository interface {
 	SumByWallet(ctx context.Context, walletID, currency string) (domain.Money, int, error)
 }
 
-// OutboxRecord is an unpublished domain event snapshot (ADR 0014).
+// OutboxRecord is an unpublished domain event snapshot (ADR 0014 / ADR 0016).
 type OutboxRecord struct {
 	EventID       string
 	EventType     string
@@ -110,9 +111,34 @@ type OutboxRecord struct {
 	CausationID   string
 	OccurredAt    time.Time
 	Payload       []byte
+	Attempts      int
+}
+
+// Envelope is the published outbox message (OBX-06, ADR 0015).
+type Envelope struct {
+	EventID       string          `json:"eventId"`
+	EventType     string          `json:"eventType"`
+	AggregateID   string          `json:"aggregateId"`
+	CorrelationID string          `json:"correlationId"`
+	CausationID   string          `json:"causationId,omitempty"`
+	OccurredAt    time.Time       `json:"occurredAt"`
+	Version       int             `json:"version"`
+	Data          json.RawMessage `json:"data"`
 }
 
 // OutboxRepository inserts unpublished event rows in the unit-of-work transaction.
 type OutboxRepository interface {
 	Insert(ctx context.Context, rec OutboxRecord) error
+}
+
+// OutboxClaimer claims and acknowledges unpublished rows outside the financial unit of work.
+type OutboxClaimer interface {
+	Claim(ctx context.Context, limit int, now time.Time, lease time.Duration) ([]OutboxRecord, error)
+	MarkPublished(ctx context.Context, eventID string, at time.Time) error
+	ScheduleRetry(ctx context.Context, eventID string, nextAttempt time.Time) error
+}
+
+// EventBus publishes a wire envelope to the configured destination.
+type EventBus interface {
+	Publish(ctx context.Context, env Envelope) error
 }

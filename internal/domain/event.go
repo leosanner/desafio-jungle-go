@@ -22,15 +22,15 @@ type Event interface {
 
 // WagerTransactionProcessed is emitted when an operation completes successfully, including LOSS.
 type WagerTransactionProcessed struct {
-	TransactionID         string
-	WalletID              string
-	PlayerID              string
-	Origin                Origin
-	ProviderID            string
-	ExternalTransactionID string
-	Kind                  Kind
-	Money                 Money
-	OccurredAtUTC         time.Time
+	TransactionID         string    `json:"transactionId"`
+	WalletID              string    `json:"walletId"`
+	PlayerID              string    `json:"playerId"`
+	Origin                Origin    `json:"origin"`
+	ProviderID            string    `json:"providerId,omitempty"`
+	ExternalTransactionID string    `json:"externalTransactionId,omitempty"`
+	Kind                  Kind      `json:"kind"`
+	Money                 Money     `json:"money"`
+	OccurredAtUTC         time.Time `json:"occurredAt"`
 }
 
 func NewWagerTransactionProcessed(tx WagerTransaction, occurredAt time.Time) WagerTransactionProcessed {
@@ -54,16 +54,16 @@ func (e WagerTransactionProcessed) OccurredAt() time.Time { return e.OccurredAtU
 
 // WagerTransactionRejected is a definitive business rejection.
 type WagerTransactionRejected struct {
-	TransactionID         string
-	WalletID              string
-	PlayerID              string
-	Origin                Origin
-	ProviderID            string
-	ExternalTransactionID string
-	Kind                  Kind
-	Money                 Money
-	FailureCode           FailureCode
-	OccurredAtUTC         time.Time
+	TransactionID         string      `json:"transactionId"`
+	WalletID              string      `json:"walletId"`
+	PlayerID              string      `json:"playerId"`
+	Origin                Origin      `json:"origin"`
+	ProviderID            string      `json:"providerId,omitempty"`
+	ExternalTransactionID string      `json:"externalTransactionId,omitempty"`
+	Kind                  Kind        `json:"kind"`
+	Money                 Money       `json:"money"`
+	FailureCode           FailureCode `json:"failureCode"`
+	OccurredAtUTC         time.Time   `json:"occurredAt"`
 }
 
 func NewWagerTransactionRejected(tx WagerTransaction, occurredAt time.Time) WagerTransactionRejected {
@@ -88,14 +88,14 @@ func (e WagerTransactionRejected) OccurredAt() time.Time { return e.OccurredAtUT
 
 // WalletBalanceChanged is emitted only when the stored balance actually changes.
 type WalletBalanceChanged struct {
-	WalletID      string
-	TransactionID string
-	Direction     Direction
-	Money         Money
-	BalanceBefore Money
-	BalanceAfter  Money
-	WalletVersion int64
-	OccurredAtUTC time.Time
+	WalletID      string    `json:"walletId"`
+	TransactionID string    `json:"transactionId"`
+	Direction     Direction `json:"direction"`
+	Money         Money     `json:"money"`
+	BalanceBefore Money     `json:"balanceBefore"`
+	BalanceAfter  Money     `json:"balanceAfter"`
+	WalletVersion int64     `json:"walletVersion"`
+	OccurredAtUTC time.Time `json:"occurredAt"`
 }
 
 // WalletBalanceChangedParams is the constructor input for WalletBalanceChanged.
@@ -130,11 +130,11 @@ func (e WalletBalanceChanged) OccurredAt() time.Time { return e.OccurredAtUTC }
 
 // WagerTransactionPendingReference records wait for a missing or still-pending reference.
 type WagerTransactionPendingReference struct {
-	TransactionID       string
-	WalletID            string
-	ProviderID          string
-	ReferenceExternalID string
-	OccurredAtUTC       time.Time
+	TransactionID       string    `json:"transactionId"`
+	WalletID            string    `json:"walletId"`
+	ProviderID          string    `json:"providerId"`
+	ReferenceExternalID string    `json:"referenceExternalId"`
+	OccurredAtUTC       time.Time `json:"occurredAt"`
 }
 
 func NewWagerTransactionPendingReference(tx WagerTransaction, occurredAt time.Time) WagerTransactionPendingReference {
