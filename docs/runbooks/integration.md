@@ -1,4 +1,4 @@
-# Integration tests (TST-04, TST-07, HTTP use cases, Phase 6 outbox, Phase 7 inbound, Phase 8 pending)
+# Integration tests (TST-04, TST-07, HTTP use cases, Phase 6–9)
 
 Postgres constraint, atomicity and HTTP use-case tests use build tag `integration` and a real PostgreSQL.
 Keycloak and SQS are **not** required for TST-04, the Phase 5 HTTP tests (`TestHTTPPhase5UseCases`,
@@ -25,14 +25,19 @@ Phase 8 pending tests (`TestPendingClaimSkipLocked`, `TestPendingRefundResolvesW
 `TestPendingTwoResumersOneRefund`) need `POSTGRES_DSN` only. TST-14/15 do not require SQS: inbound
 already deleted the message; the worker claims SQL rows.
 
+Phase 9 multi-instance tests (`TestInstances*` in `internal/composition`) need Postgres, Keycloak
+and LocalStack. They build `cmd/wagering` and start three OS processes ([ADR 0020](../adr/0020-multi-instance-and-failure-injection.md)).
+Runbook: [`multiple-instances.md`](multiple-instances.md). Failure windows:
+[`failure-simulation.md`](failure-simulation.md).
+
 OIDC tests (TST-07) use the same tag and a real Keycloak with realm `wagering` imported.
 
 ## Prerequisites
 
 - Docker and Docker Compose
 - `POSTGRES_DSN` for TST-04 (host value in [`.env.example`](../../.env.example))
-- `AWS_ENDPOINT_URL` (and a healthy LocalStack) for Phase 6 publish tests and Phase 7 inbound tests
-- `OIDC_ISSUER` (and a healthy Keycloak) for TST-07
+- `AWS_ENDPOINT_URL` (and a healthy LocalStack) for Phase 6 publish tests, Phase 7 inbound tests and Phase 9 instances
+- `OIDC_ISSUER` (and a healthy Keycloak) for TST-07 and Phase 9 instances
 
 ## Run
 
@@ -60,6 +65,14 @@ set -a && source .env.example && set +a
 go test -tags=integration ./internal/adapter/auth/... ./internal/adapter/http/...
 ```
 
+Three OS processes (TST-11, CON-02):
+
+```sh
+docker compose up -d postgres keycloak localstack
+set -a && source .env.example && set +a
+go test -tags=integration -timeout 15m ./internal/composition/ -run 'TestInstances'
+```
+
 Or the full tagged suite (needs Postgres, Keycloak and LocalStack for start/stop):
 
 ```sh
@@ -80,6 +93,7 @@ Files:
 - `internal/adapter/postgres/inbound_integration_test.go` — inbox atomicity, consume, TST-12 skip-delete, DLQ, HTTP×SQS, application dedup
 - `internal/adapter/postgres/pending_integration_test.go` — pending claim `SKIP LOCKED`, TST-14 resolution/expiry, TST-15 `PENDING` resume
 - `internal/composition/start_stop_integration_test.go` — Fx start/stop including the outbox, inbound and pending workers
+- `internal/composition/instances_integration_test.go` — three `cmd/wagering` processes (TST-11, CON-02, SIGKILL resume)
 - `internal/adapter/auth/oidc_integration_test.go` — `TestOIDCVerifierRealIdP`
 - `internal/adapter/http/auth_integration_test.go` — `TestAuthRealIdP` (missing/invalid token, isolation, internal restriction, no wallet writes on 403)
 

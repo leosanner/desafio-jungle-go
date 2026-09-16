@@ -11,6 +11,7 @@ PostgreSQL and `POSTGRES_DSN` only. Keycloak and SQS are not required for that s
 `OIDC_ISSUER` (host value in [`.env.example`](../../.env.example)). PostgreSQL is optional for the
 auth tests except the side-effect count in `TestAuthRealIdP`. Phase 6 outbox publish and Phase 7
 inbound consume also need LocalStack. Phase 8 pending-reference tests need PostgreSQL only.
+Phase 9 `TestInstances*` needs PostgreSQL, Keycloak and LocalStack.
 
 ## Prerequisites
 
@@ -86,9 +87,11 @@ go test -tags=integration ./...
 Tests skip when required env is missing (`skip-if-no-env`). That skip is not a substitute for
 real-container CI. TST-04 (`./internal/adapter/postgres/...`) skips without `POSTGRES_DSN` and does
 not need Keycloak or LocalStack. TST-07 (`./internal/adapter/auth/...`, `./internal/adapter/http/...`)
-skips without `OIDC_ISSUER`. See [integration.md](integration.md).
+skips without `OIDC_ISSUER`. Phase 9 (`./internal/composition/ -run TestInstances`) skips without
+`POSTGRES_DSN`, `OIDC_ISSUER` or `AWS_ENDPOINT_URL`. See [integration.md](integration.md).
 
-Multi-instance and failure-injection procedures are separate runbooks (not written yet).
+Multi-instance: [`multiple-instances.md`](multiple-instances.md). Failure injection:
+[`failure-simulation.md`](failure-simulation.md).
 
 ## Stop
 

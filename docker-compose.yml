@@ -1,5 +1,7 @@
 # Local stack: PostgreSQL, Keycloak (OIDC realm import), LocalStack SQS, and the wagering process.
 #   docker compose up --build
+# Three app replicas (ports 8080/8082/8083):
+#   docker compose -f docker-compose.yml -f docker-compose.instances.yml up --build
 #
 # The app waits for Postgres, LocalStack (queues) and Keycloak to be healthy.
 
