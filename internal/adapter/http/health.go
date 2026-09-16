@@ -55,10 +55,10 @@ func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, http.StatusOK, statusResponse{Status: "ok"})
 }
 
-func (s *Server) writeJSON(w http.ResponseWriter, status int, body statusResponse) {
+func (s *Server) writeJSON(w http.ResponseWriter, status int, body any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(body); err != nil {
-		s.log.Error("health: write json", "err", err)
+		s.log.Error("http: write json", "err", err)
 	}
 }

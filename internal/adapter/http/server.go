@@ -10,8 +10,14 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/leosanner/desafio-jungle-go/internal/app"
 	"github.com/leosanner/desafio-jungle-go/internal/config"
 )
+
+// TokenVerifier validates a raw Bearer JWT and returns the application actor.
+type TokenVerifier interface {
+	Verify(ctx context.Context, rawJWT string) (app.Actor, error)
+}
 
 // Server is the HTTP adapter. Domain code must not import this package.
 type Server struct {
@@ -19,19 +25,31 @@ type Server struct {
 	log          *slog.Logger
 	srv          *http.Server
 	checkers     Checkers
+	tokens       TokenVerifier
 	shuttingDown atomic.Bool
 }
 
-// New constructs the HTTP server and registers public health routes.
-func New(cfg config.Config, log *slog.Logger, checkers Checkers) *Server {
+// New constructs the HTTP server, public health routes and protected stubs.
+func New(cfg config.Config, log *slog.Logger, checkers Checkers, tokens TokenVerifier) *Server {
 	s := &Server{
 		addr:     cfg.HTTPAddr,
 		log:      log,
 		checkers: checkers,
+		tokens:   tokens,
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health/live", s.handleLive)
 	mux.HandleFunc("GET /health/ready", s.handleReady)
+
+	mux.Handle("POST /wallets", s.authenticate(s.requireInternal(http.HandlerFunc(s.notImplemented))))
+	mux.Handle("GET /wallets/{walletId}", s.authenticate(s.requireInternal(http.HandlerFunc(s.notImplemented))))
+	mux.Handle("GET /wallets/{walletId}/ledger", s.authenticate(s.requireInternal(http.HandlerFunc(s.notImplemented))))
+	mux.Handle("POST /wallets/{walletId}/reconciliation", s.authenticate(s.requireInternal(http.HandlerFunc(s.notImplemented))))
+
+	mux.Handle("POST /wagering/transactions", s.authenticate(http.HandlerFunc(s.handlePostWagering)))
+	mux.Handle("GET /wagering/transactions/{transactionId}", s.authenticate(http.HandlerFunc(s.notImplemented)))
+	mux.Handle("GET /providers/{providerId}/wagering/transactions/{externalTransactionId}", s.authenticate(http.HandlerFunc(s.handleProviderTransaction)))
+
 	s.srv = &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           mux,

@@ -10,6 +10,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/leosanner/desafio-jungle-go/internal/adapter/auth"
+	"github.com/leosanner/desafio-jungle-go/internal/app"
 	"github.com/leosanner/desafio-jungle-go/internal/config"
 )
 
@@ -25,7 +27,13 @@ func (f fakeChecker) Check(context.Context) error { return f.err }
 func testServer(t *testing.T, checkers Checkers) *Server {
 	t.Helper()
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	return New(config.Config{HTTPAddr: ":0"}, log, checkers)
+	return New(config.Config{HTTPAddr: ":0"}, log, checkers, rejectTokens{})
+}
+
+type rejectTokens struct{}
+
+func (rejectTokens) Verify(context.Context, string) (app.Actor, error) {
+	return app.Actor{}, auth.ErrUnauthenticated
 }
 
 func TestLiveAlwaysOK(t *testing.T) {

@@ -22,6 +22,7 @@ func Modules() fx.Option {
 		configModule(),
 		postgresModule(),
 		sqsModule(),
+		authModule(),
 		httpModule(),
 	)
 }
