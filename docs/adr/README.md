@@ -23,6 +23,8 @@ Accepted ADRs are not rewritten: a change of direction creates a new ADR that su
 | [0012](0012-idempotency-canonical-hash.md) | Canonical idempotency hash | Proposed |
 | [0013](0013-http-status-mapping.md) | HTTP status and error-body mapping | Proposed |
 | [0014](0014-outbox-persistence.md) | Outbox persistence without a publisher | Proposed |
+| [0015](0015-outbox-destination-and-routing.md) | Outbox destination and routing (SQS FIFO) | Proposed |
+| [0016](0016-outbox-claim-and-backoff.md) | Outbox claim, lease, backoff and recovery | Proposed |
 
 ## Pending decisions
 
@@ -40,7 +42,7 @@ Decisions the challenge requires documenting that don't have an ADR yet:
 - [x] `REFUND` and `ROLLBACK` combinations on the same bet — [ADR 0008](0008-refund-rollback-combinations.md) (Proposed)
 - [x] `failureCode` HTTP mapping — [ADR 0013](0013-http-status-mapping.md) (Proposed); [`docs/api/status.md`](../api/status.md)
 - [ ] SQS inbox: visibility timeout, attempts, DLQ, invalid messages, `MessageGroupId`/`MessageDeduplicationId`
-- [ ] Outbox: concurrent claim, lease, backoff, event destination and routing (table + insert: [ADR 0014](0014-outbox-persistence.md))
+- [x] Outbox: concurrent claim, lease, backoff, event destination and routing — [ADR 0014](0014-outbox-persistence.md) (insert), [ADR 0015](0015-outbox-destination-and-routing.md) (destination), [ADR 0016](0016-outbox-claim-and-backoff.md) (claimer) (Proposed)
 - [x] IdP, token validation and permission model (providers × internal service) — [ADR 0011](0011-oidc-keycloak-auth.md) (Proposed)
 - [ ] Logs, metrics and (optional) tracing — JSON `log/slog` chosen in [ADR 0002](0002-go-version-and-http-router.md); correlation fields, metrics and tracing still open
 - [x] Fx lifecycle and shutdown strategy
