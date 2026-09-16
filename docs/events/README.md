@@ -40,3 +40,4 @@ See [inbound.md](inbound.md).
 | This README | Queue names including `wager-events.fifo` |
 | [inbound.md](inbound.md) | `WagerTransactionRequested` envelope, FIFO ids, delete/retry/DLQ |
 | [outbox-events.md](outbox-events.md) | Domain event types, envelope example, SQS group/dedup ids |
+| [pending-references.md](pending-references.md) | `PENDING` / `PENDING_REFERENCE` worker, backoff, TTL, `REFERENCE_NOT_FOUND` |

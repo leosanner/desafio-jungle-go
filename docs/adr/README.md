@@ -27,6 +27,7 @@ Accepted ADRs are not rewritten: a change of direction creates a new ADR that su
 | [0016](0016-outbox-claim-and-backoff.md) | Outbox claim, lease, backoff and recovery | Proposed |
 | [0017](0017-inbox-persistence.md) | Inbox persistence in the financial unit of work | Proposed |
 | [0018](0018-sqs-inbound-consume.md) | SQS inbound consume, retry, DLQ and shutdown | Proposed |
+| [0019](0019-pending-reference-resume.md) | Pending-reference worker, backoff, TTL and PENDING resume | Proposed |
 
 ## Pending decisions
 
@@ -40,7 +41,7 @@ Decisions the challenge requires documenting that don't have an ADR yet:
 - [x] Per-wallet concurrency strategy (pessimistic × optimistic × conditional update) — [ADR 0010](0010-per-wallet-concurrency.md) (Proposed)
 - [x] Idempotency: key scope, hash algorithm, canonical JSON and normalizations — [ADR 0012](0012-idempotency-canonical-hash.md) (Proposed)
 - [x] `WagerTransaction` state machine and transient × permanent failure classification — [ADR 0007](0007-wager-transaction-state-machine.md) (Proposed)
-- [ ] Pending references: backoff, max attempts/TTL (wait vs unsuccessful reference is in ADR 0007)
+- [x] Pending references: backoff, max attempts/TTL — [ADR 0019](0019-pending-reference-resume.md) (Proposed); wait vs unsuccessful reference is in ADR 0007
 - [x] `REFUND` and `ROLLBACK` combinations on the same bet — [ADR 0008](0008-refund-rollback-combinations.md) (Proposed)
 - [x] `failureCode` HTTP mapping — [ADR 0013](0013-http-status-mapping.md) (Proposed); [`docs/api/status.md`](../api/status.md)
 - [x] SQS inbox: visibility timeout, attempts, DLQ, invalid messages, `MessageGroupId`/`MessageDeduplicationId` — [ADR 0017](0017-inbox-persistence.md) (inbox), [ADR 0018](0018-sqs-inbound-consume.md) (consume) (Proposed)

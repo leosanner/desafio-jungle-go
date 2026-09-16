@@ -12,7 +12,7 @@ Auth 401/403 remain in [auth.md](auth.md). Health is in [health.md](health.md).
 | `200` | `PROCESSED` operation (first time or idempotent replay) | [wagering.md](wagering.md) result; `idempotentReplay` true on replay |
 | `200` | `GET` wallet, ledger page, transaction | Resource JSON |
 | `201` | `POST /wallets` created | Wallet |
-| `202` | `PENDING_REFERENCE` (reference missing or still pending) | Result with `status: "PENDING_REFERENCE"` |
+| `202` | `PENDING_REFERENCE` (reference missing or still pending) | Result with `status: "PENDING_REFERENCE"`; worker in [pending-references.md](../events/pending-references.md) |
 
 ## Error body
 

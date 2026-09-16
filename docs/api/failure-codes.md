@@ -27,6 +27,7 @@ are recorded outcomes (`REJECTED`) that replay must return unchanged.
 | `REFERENCE_MISMATCH` | Rejection | no | Provider/player/wallet/round/currency/amount disagree |
 | `REFERENCE_KIND_INVALID` | Rejection | no | e.g. REFUND of a WIN |
 | `REFERENCE_UNSUCCESSFUL` | Rejection | no | Reference is `REJECTED` or `FAILED` |
+| `REFERENCE_NOT_FOUND` | Rejection | no | Pending wait exhausted (`PENDING_MAX_ATTEMPTS` or `PENDING_TTL`) |
 | `IDEMPOTENCY_PAYLOAD_CONFLICT` | Rejection | no | Same idempotency key, different payload hash |
 | `DUPLICATE_EXTERNAL_TRANSACTION` | Rejection | no | Same `(providerId, externalTransactionId)` under another key |
 | `INVALID_TRANSITION` | Rejection | no | Transition from a terminal status |
@@ -37,7 +38,8 @@ HTTP: domain `Validation` → `400`; `IDEMPOTENCY_PAYLOAD_CONFLICT` and `DUPLICA
 → `202`.
 
 `PENDING_REFERENCE` is not a failure code: missing or still-pending references wait (class `Wait`).
-`REFERENCE_NOT_FOUND` after TTL is Phase 8.
+After TTL or max attempts the worker rejects with `REFERENCE_NOT_FOUND`
+([pending-references.md](../events/pending-references.md), [ADR 0019](../adr/0019-pending-reference-resume.md)).
 
 See [ADR 0007](../adr/0007-wager-transaction-state-machine.md) and
 [ADR 0008](../adr/0008-refund-rollback-combinations.md).

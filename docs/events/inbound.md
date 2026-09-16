@@ -60,7 +60,8 @@ Application dedup is the inbox plus `(provider_id, idempotency_key)`.
 | Malformed JSON, wrong type, hash mismatch, validation, payload/external-id conflict | Send to DLQ, then delete |
 | Wallet not found, deadlock / unavailable | `ChangeMessageVisibility` backoff; redrive after 5 receives |
 
-`PENDING_REFERENCE` completes the inbound message; Phase 8 resumes the transaction.
+`PENDING_REFERENCE` completes the inbound message; the pending-reference worker resumes the
+transaction ([pending-references.md](pending-references.md), [ADR 0019](../adr/0019-pending-reference-resume.md)).
 
 ## Auth
 

@@ -36,7 +36,7 @@ persisted), `Rejection` (row `REJECTED` + `failureCode`), `Wait` (`PENDING_REFER
 | Wallet created | `201` | — | Body is the wallet |
 | Operation `PROCESSED` (first or replay) | `200` | — | `idempotentReplay` true on replay; original `ResultBalance` |
 | Operation `REJECTED` (first or replay) | `422` | — | JSON `status` + `failureCode`; recorded outcome |
-| Operation `PENDING_REFERENCE` | `202` | — | Worker/TTL are Phase 8 |
+| Operation `PENDING_REFERENCE` | `202` | — | Worker/TTL: [ADR 0019](0019-pending-reference-resume.md) |
 | Validation / malformed JSON / missing `Idempotency-Key` | `400` | `invalid` | No financial row |
 | Duplicate wallet `(playerId, currency)` | `409` | `conflict` | |
 | Idempotency payload conflict / external id under another key | `409` | `conflict` | `failureCode` set |

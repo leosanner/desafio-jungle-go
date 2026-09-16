@@ -49,7 +49,8 @@ For `REFUND` / `ROLLBACK` (and optionally `WIN`), add `referenceExternalTransact
 | Same key, different payload | `409` `IDEMPOTENCY_PAYLOAD_CONFLICT` |
 | Same `(providerId, externalTransactionId)`, other key | `409` `DUPLICATE_EXTERNAL_TRANSACTION` |
 
-`REJECTED` is `422` with `failureCode`. `PENDING_REFERENCE` is `202` (Phase 8 worker resumes it).
+`REJECTED` is `422` with `failureCode`. `PENDING_REFERENCE` is `202`; the pending-reference worker
+resumes it ([pending-references.md](../events/pending-references.md)).
 
 Canonical hash fields (sorted-key JSON, SHA-256 hex): `providerId`, `externalTransactionId`,
 `playerId`, `walletId`, `roundId`, `gameId`, `kind`, `money.amount`, `money.currency`,
