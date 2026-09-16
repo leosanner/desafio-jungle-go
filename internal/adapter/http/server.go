@@ -26,28 +26,30 @@ type Server struct {
 	srv          *http.Server
 	checkers     Checkers
 	tokens       TokenVerifier
+	svc          *app.Service
 	shuttingDown atomic.Bool
 }
 
-// New constructs the HTTP server, public health routes and protected stubs.
-func New(cfg config.Config, log *slog.Logger, checkers Checkers, tokens TokenVerifier) *Server {
+// New constructs the HTTP server, public health routes and protected business routes.
+func New(cfg config.Config, log *slog.Logger, checkers Checkers, tokens TokenVerifier, svc *app.Service) *Server {
 	s := &Server{
 		addr:     cfg.HTTPAddr,
 		log:      log,
 		checkers: checkers,
 		tokens:   tokens,
+		svc:      svc,
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health/live", s.handleLive)
 	mux.HandleFunc("GET /health/ready", s.handleReady)
 
-	mux.Handle("POST /wallets", s.authenticate(s.requireInternal(http.HandlerFunc(s.notImplemented))))
-	mux.Handle("GET /wallets/{walletId}", s.authenticate(s.requireInternal(http.HandlerFunc(s.notImplemented))))
-	mux.Handle("GET /wallets/{walletId}/ledger", s.authenticate(s.requireInternal(http.HandlerFunc(s.notImplemented))))
-	mux.Handle("POST /wallets/{walletId}/reconciliation", s.authenticate(s.requireInternal(http.HandlerFunc(s.notImplemented))))
+	mux.Handle("POST /wallets", s.authenticate(s.requireInternal(http.HandlerFunc(s.handleOpenWallet))))
+	mux.Handle("GET /wallets/{walletId}", s.authenticate(s.requireInternal(http.HandlerFunc(s.handleGetWallet))))
+	mux.Handle("GET /wallets/{walletId}/ledger", s.authenticate(s.requireInternal(http.HandlerFunc(s.handleListLedger))))
+	mux.Handle("POST /wallets/{walletId}/reconciliation", s.authenticate(s.requireInternal(http.HandlerFunc(s.handleReconcile))))
 
 	mux.Handle("POST /wagering/transactions", s.authenticate(http.HandlerFunc(s.handlePostWagering)))
-	mux.Handle("GET /wagering/transactions/{transactionId}", s.authenticate(http.HandlerFunc(s.notImplemented)))
+	mux.Handle("GET /wagering/transactions/{transactionId}", s.authenticate(http.HandlerFunc(s.handleGetTransaction)))
 	mux.Handle("GET /providers/{providerId}/wagering/transactions/{externalTransactionId}", s.authenticate(http.HandlerFunc(s.handleProviderTransaction)))
 
 	s.srv = &http.Server{

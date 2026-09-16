@@ -29,7 +29,7 @@ func (s staticTokens) Verify(context.Context, string) (app.Actor, error) {
 func authServer(t *testing.T, tokens TokenVerifier) *Server {
 	t.Helper()
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	return New(config.Config{HTTPAddr: ":0"}, log, nil, tokens)
+	return New(config.Config{HTTPAddr: ":0"}, log, nil, tokens, stubService())
 }
 
 func TestHealthStaysPublic(t *testing.T) {
@@ -114,8 +114,8 @@ func TestWalletRestrictedToInternal(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer t")
 	rec = httptest.NewRecorder()
 	internal.Handler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusNotImplemented {
-		t.Fatalf("internal status = %d, want 501", rec.Code)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("internal status = %d, want 400", rec.Code)
 	}
 }
 
@@ -135,8 +135,8 @@ func TestProviderIsolationOnPath(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer t")
 	rec = httptest.NewRecorder()
 	s.Handler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusNotImplemented {
-		t.Fatalf("status = %d, want 501", rec.Code)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", rec.Code)
 	}
 }
 
@@ -148,8 +148,8 @@ func TestInternalCanReadAnyProviderPath(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer t")
 	rec := httptest.NewRecorder()
 	s.Handler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusNotImplemented {
-		t.Fatalf("status = %d, want 501", rec.Code)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", rec.Code)
 	}
 }
 
@@ -180,8 +180,8 @@ func TestPostWageringRejectsInternalAndBodyMismatch(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rec = httptest.NewRecorder()
 	provider.Handler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusNotImplemented {
-		t.Fatalf("match status = %d, want 501", rec.Code)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("match status = %d, want 400", rec.Code)
 	}
 }
 

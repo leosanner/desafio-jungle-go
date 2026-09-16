@@ -23,6 +23,7 @@ func Modules() fx.Option {
 		postgresModule(),
 		sqsModule(),
 		authModule(),
+		wageringModule(),
 		httpModule(),
 	)
 }

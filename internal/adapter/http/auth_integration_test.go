@@ -36,7 +36,7 @@ func TestAuthRealIdP(t *testing.T) {
 		OIDCInternalClient: getenv("OIDC_INTERNAL_CLIENT", "wagering-internal"),
 	}
 	v := auth.NewOIDCVerifier(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)))
-	s := New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), nil, v)
+	s := New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), nil, v, stubService())
 
 	providerA := clientCredentials(t, iss, "provider-a", "provider-a-secret")
 	providerB := clientCredentials(t, iss, "provider-b", "provider-b-secret")
@@ -60,9 +60,9 @@ func TestAuthRealIdP(t *testing.T) {
 			t.Fatalf("status = %d", rec.Code)
 		}
 	})
-	t.Run("internal reaches wallet stub", func(t *testing.T) {
+	t.Run("internal reaches wallet handler", func(t *testing.T) {
 		rec := do(s, http.MethodPost, "/wallets", internal, `{"playerId":"x"}`)
-		if rec.Code != http.StatusNotImplemented {
+		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("status = %d", rec.Code)
 		}
 	})
@@ -72,11 +72,11 @@ func TestAuthRealIdP(t *testing.T) {
 			t.Fatalf("status = %d", rec.Code)
 		}
 		rec = do(s, http.MethodGet, "/providers/provider-a/wagering/transactions/tx-1", providerA, "")
-		if rec.Code != http.StatusNotImplemented {
+		if rec.Code != http.StatusNotFound {
 			t.Fatalf("own path status = %d", rec.Code)
 		}
 		rec = do(s, http.MethodGet, "/providers/provider-b/wagering/transactions/tx-1", providerB, "")
-		if rec.Code != http.StatusNotImplemented {
+		if rec.Code != http.StatusNotFound {
 			t.Fatalf("provider-b own path status = %d", rec.Code)
 		}
 	})
