@@ -189,6 +189,24 @@ func TestApplyPendingAndUnsuccessfulReference(t *testing.T) {
 		t.Fatalf("pending ref status = %s", wait.Operation.Status())
 	}
 
+	retry, err := Apply(ApplyInput{
+		Wallet:            &w,
+		Operation:         wait.Operation,
+		Reference:         &pendingBet,
+		ReferenceLookedUp: true,
+		LedgerID:          "led-y2",
+		Now:               testNow,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if retry.Operation.Status() != StatusPendingReference {
+		t.Fatalf("retry wait status = %s", retry.Operation.Status())
+	}
+	if len(retry.Events) != 0 {
+		t.Fatalf("retry wait events = %v, want none", eventTypes(retry.Events))
+	}
+
 	rejectedBet := externalTx(t, KindBet, "25.00", "tx-bet-rej")
 	if err := rejectedBet.MarkRejected(FailureInsufficientFunds, testNow); err != nil {
 		t.Fatal(err)
@@ -300,6 +318,9 @@ func TestFailureCodeCorrectableVsDefinitive(t *testing.T) {
 	}
 	if FailureDuplicateReversal.IsCorrectable() {
 		t.Fatal("DUPLICATE_REVERSAL is definitive")
+	}
+	if FailureReferenceNotFound.IsCorrectable() {
+		t.Fatal("REFERENCE_NOT_FOUND is definitive")
 	}
 }
 

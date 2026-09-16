@@ -324,13 +324,18 @@ func rejectOp(in ApplyInput, code FailureCode, _ error) (ApplyResult, error) {
 func waitOp(in ApplyInput) (ApplyResult, error) {
 	op := in.Operation
 	now := in.Now.UTC()
+	already := op.status == StatusPendingReference
 	if err := op.MarkPendingReference("", now); err != nil {
 		return ApplyResult{}, err
+	}
+	var events []Event
+	if !already {
+		events = []Event{NewWagerTransactionPendingReference(op, now)}
 	}
 	return ApplyResult{
 		Wallet:    *in.Wallet,
 		Operation: op,
-		Events:    []Event{NewWagerTransactionPendingReference(op, now)},
+		Events:    events,
 	}, nil
 }
 

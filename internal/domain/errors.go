@@ -40,6 +40,7 @@ const (
 	FailureReferenceMismatch            FailureCode = "REFERENCE_MISMATCH"
 	FailureReferenceKindInvalid         FailureCode = "REFERENCE_KIND_INVALID"
 	FailureReferenceUnsuccessful        FailureCode = "REFERENCE_UNSUCCESSFUL"
+	FailureReferenceNotFound            FailureCode = "REFERENCE_NOT_FOUND"
 	FailureDuplicateReversal            FailureCode = "DUPLICATE_REVERSAL"
 	FailureInvalidTransition            FailureCode = "INVALID_TRANSITION"
 	FailureInvalidKind                  FailureCode = "INVALID_KIND"
@@ -93,6 +94,7 @@ var (
 	ErrReferenceMismatch            = errors.New("operation does not match its reference")
 	ErrReferenceKindInvalid         = errors.New("reference kind is not valid for this operation")
 	ErrReferenceUnsuccessful        = errors.New("reference did not complete successfully")
+	ErrReferenceNotFound            = errors.New("reference not found before pending expiry")
 	ErrReferencePending             = errors.New("reference is not yet available")
 	ErrDuplicateReversal            = errors.New("reference already has a successful reversal of this kind")
 	ErrInvalidTransition            = errors.New("invalid status transition")
