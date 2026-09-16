@@ -16,20 +16,25 @@ import (
 	"github.com/leosanner/desafio-jungle-go/internal/config"
 )
 
-// Client is an SQS adapter used for readiness, outbox publish, and (later) consume.
+// Client is an SQS adapter used for readiness, outbox publish, and inbound consume.
 type Client struct {
 	api       queueAPI
 	wager     string
 	dlq       string
 	events    string
 	mu        sync.Mutex
+	wagerURL  string
+	dlqURL    string
 	eventsURL string
 }
 
 type queueAPI interface {
 	GetQueueUrl(ctx context.Context, params *sqs.GetQueueUrlInput, optFns ...func(*sqs.Options)) (*sqs.GetQueueUrlOutput, error)
+	GetQueueAttributes(ctx context.Context, params *sqs.GetQueueAttributesInput, optFns ...func(*sqs.Options)) (*sqs.GetQueueAttributesOutput, error)
 	SendMessage(ctx context.Context, params *sqs.SendMessageInput, optFns ...func(*sqs.Options)) (*sqs.SendMessageOutput, error)
 	ReceiveMessage(ctx context.Context, params *sqs.ReceiveMessageInput, optFns ...func(*sqs.Options)) (*sqs.ReceiveMessageOutput, error)
+	DeleteMessage(ctx context.Context, params *sqs.DeleteMessageInput, optFns ...func(*sqs.Options)) (*sqs.DeleteMessageOutput, error)
+	ChangeMessageVisibility(ctx context.Context, params *sqs.ChangeMessageVisibilityInput, optFns ...func(*sqs.Options)) (*sqs.ChangeMessageVisibilityOutput, error)
 	CreateQueue(ctx context.Context, params *sqs.CreateQueueInput, optFns ...func(*sqs.Options)) (*sqs.CreateQueueOutput, error)
 	DeleteQueue(ctx context.Context, params *sqs.DeleteQueueInput, optFns ...func(*sqs.Options)) (*sqs.DeleteQueueOutput, error)
 }
@@ -70,10 +75,12 @@ func NewClient(cfg config.Config) (*Client, error) {
 
 // CheckQueues verifies the wager, DLQ and events queues exist (GetQueueUrl).
 func (c *Client) CheckQueues(ctx context.Context) error {
-	if _, err := c.queueURL(ctx, c.wager); err != nil {
+	wagerURL, err := c.queueURL(ctx, c.wager)
+	if err != nil {
 		return fmt.Errorf("sqs: wager queue %q: %w", c.wager, err)
 	}
-	if _, err := c.queueURL(ctx, c.dlq); err != nil {
+	dlqURL, err := c.queueURL(ctx, c.dlq)
+	if err != nil {
 		return fmt.Errorf("sqs: dlq %q: %w", c.dlq, err)
 	}
 	url, err := c.queueURL(ctx, c.events)
@@ -81,6 +88,8 @@ func (c *Client) CheckQueues(ctx context.Context) error {
 		return fmt.Errorf("sqs: events queue %q: %w", c.events, err)
 	}
 	c.mu.Lock()
+	c.wagerURL = wagerURL
+	c.dlqURL = dlqURL
 	c.eventsURL = url
 	c.mu.Unlock()
 	return nil

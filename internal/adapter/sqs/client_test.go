@@ -41,6 +41,10 @@ func (f *fakeQueueAPI) GetQueueUrl(_ context.Context, params *sqs.GetQueueUrlInp
 	return nil, errors.New("unknown queue")
 }
 
+func (f *fakeQueueAPI) GetQueueAttributes(context.Context, *sqs.GetQueueAttributesInput, ...func(*sqs.Options)) (*sqs.GetQueueAttributesOutput, error) {
+	return &sqs.GetQueueAttributesOutput{}, nil
+}
+
 func (f *fakeQueueAPI) SendMessage(_ context.Context, params *sqs.SendMessageInput, _ ...func(*sqs.Options)) (*sqs.SendMessageOutput, error) {
 	if f.sendErr != nil {
 		return nil, f.sendErr
@@ -51,6 +55,14 @@ func (f *fakeQueueAPI) SendMessage(_ context.Context, params *sqs.SendMessageInp
 
 func (f *fakeQueueAPI) ReceiveMessage(context.Context, *sqs.ReceiveMessageInput, ...func(*sqs.Options)) (*sqs.ReceiveMessageOutput, error) {
 	return &sqs.ReceiveMessageOutput{}, nil
+}
+
+func (f *fakeQueueAPI) DeleteMessage(context.Context, *sqs.DeleteMessageInput, ...func(*sqs.Options)) (*sqs.DeleteMessageOutput, error) {
+	return &sqs.DeleteMessageOutput{}, nil
+}
+
+func (f *fakeQueueAPI) ChangeMessageVisibility(context.Context, *sqs.ChangeMessageVisibilityInput, ...func(*sqs.Options)) (*sqs.ChangeMessageVisibilityOutput, error) {
+	return &sqs.ChangeMessageVisibilityOutput{}, nil
 }
 
 func (f *fakeQueueAPI) CreateQueue(context.Context, *sqs.CreateQueueInput, ...func(*sqs.Options)) (*sqs.CreateQueueOutput, error) {
