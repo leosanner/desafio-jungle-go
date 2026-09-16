@@ -25,7 +25,7 @@ fi
 
 awslocal sqs create-queue \
 	--queue-name "${MAIN_NAME}" \
-	--attributes FifoQueue=true,ContentBasedDeduplication=true >/dev/null
+	--attributes FifoQueue=true,ContentBasedDeduplication=true,VisibilityTimeout=30 >/dev/null
 
 # Outbound domain events (ADR 0015). Explicit MessageDeduplicationId = eventId;
 # content-based deduplication stays off (FIFO default).

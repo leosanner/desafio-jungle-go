@@ -24,27 +24,30 @@ var (
 
 // Config is process configuration loaded from the environment.
 type Config struct {
-	LogLevel           string
-	HTTPAddr           string
-	PostgresDSN        string
-	MigrationsPath     string
-	AWSRegion          string
-	AWSAccessKeyID     string
-	AWSSecretAccessKey string
-	AWSEndpointURL     string
-	SQSWagerQueueName  string
-	SQSWagerDLQName    string
-	SQSEventsQueueName string
-	FXStartTimeout     time.Duration
-	FXStopTimeout      time.Duration
-	OutboxPollInterval time.Duration
-	OutboxBatchSize    int
-	OutboxLease        time.Duration
-	OutboxBackoffMax   time.Duration
-	OIDCIssuer         string
-	OIDCAudience       string
-	OIDCJWKSURL        string
-	OIDCInternalClient string
+	LogLevel             string
+	HTTPAddr             string
+	PostgresDSN          string
+	MigrationsPath       string
+	AWSRegion            string
+	AWSAccessKeyID       string
+	AWSSecretAccessKey   string
+	AWSEndpointURL       string
+	SQSWagerQueueName    string
+	SQSWagerDLQName      string
+	SQSEventsQueueName   string
+	FXStartTimeout       time.Duration
+	FXStopTimeout        time.Duration
+	OutboxPollInterval   time.Duration
+	OutboxBatchSize      int
+	OutboxLease          time.Duration
+	OutboxBackoffMax     time.Duration
+	SQSVisibilityTimeout time.Duration
+	SQSWaitTime          time.Duration
+	SQSBackoffMax        time.Duration
+	OIDCIssuer           string
+	OIDCAudience         string
+	OIDCJWKSURL          string
+	OIDCInternalClient   string
 }
 
 // Load reads configuration from the environment and validates it.
@@ -73,29 +76,44 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	visibility, err := parseDuration("SQS_VISIBILITY_TIMEOUT")
+	if err != nil {
+		return Config{}, err
+	}
+	waitTime, err := parseDuration("SQS_WAIT_TIME")
+	if err != nil {
+		return Config{}, err
+	}
+	sqsBackoff, err := parseDuration("SQS_BACKOFF_MAX")
+	if err != nil {
+		return Config{}, err
+	}
 
 	cfg := Config{
-		LogLevel:           os.Getenv("LOG_LEVEL"),
-		HTTPAddr:           os.Getenv("HTTP_ADDR"),
-		PostgresDSN:        os.Getenv("POSTGRES_DSN"),
-		MigrationsPath:     os.Getenv("MIGRATIONS_PATH"),
-		AWSRegion:          os.Getenv("AWS_REGION"),
-		AWSAccessKeyID:     os.Getenv("AWS_ACCESS_KEY_ID"),
-		AWSSecretAccessKey: os.Getenv("AWS_SECRET_ACCESS_KEY"),
-		AWSEndpointURL:     strings.TrimSpace(os.Getenv("AWS_ENDPOINT_URL")),
-		SQSWagerQueueName:  os.Getenv("SQS_WAGER_QUEUE_NAME"),
-		SQSWagerDLQName:    os.Getenv("SQS_WAGER_DLQ_NAME"),
-		SQSEventsQueueName: os.Getenv("SQS_EVENTS_QUEUE_NAME"),
-		FXStartTimeout:     startTimeout,
-		FXStopTimeout:      stopTimeout,
-		OutboxPollInterval: pollInterval,
-		OutboxBatchSize:    batchSize,
-		OutboxLease:        lease,
-		OutboxBackoffMax:   backoffMax,
-		OIDCIssuer:         strings.TrimSpace(os.Getenv("OIDC_ISSUER")),
-		OIDCAudience:       strings.TrimSpace(os.Getenv("OIDC_AUDIENCE")),
-		OIDCJWKSURL:        strings.TrimSpace(os.Getenv("OIDC_JWKS_URL")),
-		OIDCInternalClient: strings.TrimSpace(os.Getenv("OIDC_INTERNAL_CLIENT")),
+		LogLevel:             os.Getenv("LOG_LEVEL"),
+		HTTPAddr:             os.Getenv("HTTP_ADDR"),
+		PostgresDSN:          os.Getenv("POSTGRES_DSN"),
+		MigrationsPath:       os.Getenv("MIGRATIONS_PATH"),
+		AWSRegion:            os.Getenv("AWS_REGION"),
+		AWSAccessKeyID:       os.Getenv("AWS_ACCESS_KEY_ID"),
+		AWSSecretAccessKey:   os.Getenv("AWS_SECRET_ACCESS_KEY"),
+		AWSEndpointURL:       strings.TrimSpace(os.Getenv("AWS_ENDPOINT_URL")),
+		SQSWagerQueueName:    os.Getenv("SQS_WAGER_QUEUE_NAME"),
+		SQSWagerDLQName:      os.Getenv("SQS_WAGER_DLQ_NAME"),
+		SQSEventsQueueName:   os.Getenv("SQS_EVENTS_QUEUE_NAME"),
+		FXStartTimeout:       startTimeout,
+		FXStopTimeout:        stopTimeout,
+		OutboxPollInterval:   pollInterval,
+		OutboxBatchSize:      batchSize,
+		OutboxLease:          lease,
+		OutboxBackoffMax:     backoffMax,
+		SQSVisibilityTimeout: visibility,
+		SQSWaitTime:          waitTime,
+		SQSBackoffMax:        sqsBackoff,
+		OIDCIssuer:           strings.TrimSpace(os.Getenv("OIDC_ISSUER")),
+		OIDCAudience:         strings.TrimSpace(os.Getenv("OIDC_AUDIENCE")),
+		OIDCJWKSURL:          strings.TrimSpace(os.Getenv("OIDC_JWKS_URL")),
+		OIDCInternalClient:   strings.TrimSpace(os.Getenv("OIDC_INTERNAL_CLIENT")),
 	}
 	if err := cfg.Validate(); err != nil {
 		return Config{}, err
@@ -167,6 +185,18 @@ func (c *Config) Validate() error {
 	}
 	if c.OutboxBatchSize <= 0 {
 		return fmt.Errorf("%w: OUTBOX_BATCH_SIZE must be positive", ErrInvalidInt)
+	}
+	if c.SQSVisibilityTimeout <= 0 {
+		return fmt.Errorf("%w: SQS_VISIBILITY_TIMEOUT must be positive", ErrInvalidDuration)
+	}
+	if c.SQSWaitTime <= 0 {
+		return fmt.Errorf("%w: SQS_WAIT_TIME must be positive", ErrInvalidDuration)
+	}
+	if c.SQSWaitTime > 20*time.Second {
+		return fmt.Errorf("%w: SQS_WAIT_TIME must be at most 20s", ErrInvalidDuration)
+	}
+	if c.SQSBackoffMax <= 0 {
+		return fmt.Errorf("%w: SQS_BACKOFF_MAX must be positive", ErrInvalidDuration)
 	}
 	return nil
 }

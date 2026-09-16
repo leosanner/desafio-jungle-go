@@ -25,6 +25,9 @@ func setValidEnv(t *testing.T) {
 	t.Setenv("OUTBOX_BATCH_SIZE", "10")
 	t.Setenv("OUTBOX_LEASE", "30s")
 	t.Setenv("OUTBOX_BACKOFF_MAX", "1m")
+	t.Setenv("SQS_VISIBILITY_TIMEOUT", "30s")
+	t.Setenv("SQS_WAIT_TIME", "20s")
+	t.Setenv("SQS_BACKOFF_MAX", "20s")
 	t.Setenv("OIDC_ISSUER", "http://localhost:8081/realms/wagering")
 	t.Setenv("OIDC_AUDIENCE", "wagering-api")
 	t.Setenv("OIDC_INTERNAL_CLIENT", "wagering-internal")
@@ -72,6 +75,15 @@ func TestLoadSuccess(t *testing.T) {
 	}
 	if cfg.OutboxBackoffMax != time.Minute {
 		t.Errorf("OutboxBackoffMax = %s", cfg.OutboxBackoffMax)
+	}
+	if cfg.SQSVisibilityTimeout != 30*time.Second {
+		t.Errorf("SQSVisibilityTimeout = %s", cfg.SQSVisibilityTimeout)
+	}
+	if cfg.SQSWaitTime != 20*time.Second {
+		t.Errorf("SQSWaitTime = %s", cfg.SQSWaitTime)
+	}
+	if cfg.SQSBackoffMax != 20*time.Second {
+		t.Errorf("SQSBackoffMax = %s", cfg.SQSBackoffMax)
 	}
 }
 
@@ -143,6 +155,9 @@ func TestLoadMissingRequired(t *testing.T) {
 		"OUTBOX_BATCH_SIZE",
 		"OUTBOX_LEASE",
 		"OUTBOX_BACKOFF_MAX",
+		"SQS_VISIBILITY_TIMEOUT",
+		"SQS_WAIT_TIME",
+		"SQS_BACKOFF_MAX",
 		"FX_STOP_TIMEOUT",
 		"OIDC_ISSUER",
 		"OIDC_AUDIENCE",
@@ -198,6 +213,14 @@ func TestLoadBadDuration(t *testing.T) {
 	t.Run("outbox lease", func(t *testing.T) {
 		setValidEnv(t)
 		t.Setenv("OUTBOX_LEASE", "0s")
+		_, err := Load()
+		if !errors.Is(err, ErrInvalidDuration) {
+			t.Fatalf("err = %v, want %v", err, ErrInvalidDuration)
+		}
+	})
+	t.Run("sqs wait too long", func(t *testing.T) {
+		setValidEnv(t)
+		t.Setenv("SQS_WAIT_TIME", "21s")
 		_, err := Load()
 		if !errors.Is(err, ErrInvalidDuration) {
 			t.Fatalf("err = %v, want %v", err, ErrInvalidDuration)
