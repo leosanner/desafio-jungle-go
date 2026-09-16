@@ -19,6 +19,7 @@ Accepted ADRs are not rewritten: a change of direction creates a new ADR that su
 | [0008](0008-refund-rollback-combinations.md) | REFUND and ROLLBACK combinations | Proposed |
 | [0009](0009-sql-unit-of-work.md) | SQL unit of work / transaction boundary | Proposed |
 | [0010](0010-per-wallet-concurrency.md) | Per-wallet concurrency | Proposed |
+| [0011](0011-oidc-keycloak-auth.md) | OIDC authentication with Keycloak | Proposed |
 
 ## Pending decisions
 
@@ -37,7 +38,7 @@ Decisions the challenge requires documenting that don't have an ADR yet:
 - [ ] `failureCode` HTTP mapping (catalog started in [`docs/api/failure-codes.md`](../api/failure-codes.md))
 - [ ] SQS inbox: visibility timeout, attempts, DLQ, invalid messages, `MessageGroupId`/`MessageDeduplicationId`
 - [ ] Outbox: concurrent claim, lease, backoff, event destination and routing
-- [ ] IdP, token validation and permission model (providers × internal service)
+- [x] IdP, token validation and permission model (providers × internal service) — [ADR 0011](0011-oidc-keycloak-auth.md) (Proposed)
 - [ ] Logs, metrics and (optional) tracing — JSON `log/slog` chosen in [ADR 0002](0002-go-version-and-http-router.md); correlation fields, metrics and tracing still open
 - [x] Fx lifecycle and shutdown strategy
 - [x] Test strategy: build tags, containers, multiple instances and failure injection
