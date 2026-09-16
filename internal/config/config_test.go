@@ -20,6 +20,9 @@ func setValidEnv(t *testing.T) {
 	t.Setenv("SQS_WAGER_DLQ_NAME", "wager-transactions-dlq.fifo")
 	t.Setenv("FX_START_TIMEOUT", "15s")
 	t.Setenv("FX_STOP_TIMEOUT", "30s")
+	t.Setenv("OIDC_ISSUER", "http://localhost:8081/realms/wagering")
+	t.Setenv("OIDC_AUDIENCE", "wagering-api")
+	t.Setenv("OIDC_INTERNAL_CLIENT", "wagering-internal")
 }
 
 func TestLoadSuccess(t *testing.T) {
@@ -41,6 +44,15 @@ func TestLoadSuccess(t *testing.T) {
 	if cfg.AWSEndpointURL != "http://localhost:4566" {
 		t.Errorf("AWSEndpointURL = %q", cfg.AWSEndpointURL)
 	}
+	if cfg.OIDCIssuer != "http://localhost:8081/realms/wagering" {
+		t.Errorf("OIDCIssuer = %q", cfg.OIDCIssuer)
+	}
+	if cfg.OIDCAudience != "wagering-api" {
+		t.Errorf("OIDCAudience = %q", cfg.OIDCAudience)
+	}
+	if cfg.OIDCInternalClient != "wagering-internal" {
+		t.Errorf("OIDCInternalClient = %q", cfg.OIDCInternalClient)
+	}
 }
 
 func TestLoadDefaultMigrationsPath(t *testing.T) {
@@ -53,6 +65,32 @@ func TestLoadDefaultMigrationsPath(t *testing.T) {
 	}
 	if cfg.MigrationsPath != defaultMigrationsPath {
 		t.Errorf("MigrationsPath = %q, want %q", cfg.MigrationsPath, defaultMigrationsPath)
+	}
+}
+
+func TestLoadOptionalOIDCJWKSURL(t *testing.T) {
+	setValidEnv(t)
+	t.Setenv("OIDC_JWKS_URL", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.OIDCJWKSURL != "" {
+		t.Errorf("OIDCJWKSURL = %q, want empty", cfg.OIDCJWKSURL)
+	}
+}
+
+func TestLoadTrimsIssuerSlash(t *testing.T) {
+	setValidEnv(t)
+	t.Setenv("OIDC_ISSUER", "http://localhost:8081/realms/wagering/")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.OIDCIssuer != "http://localhost:8081/realms/wagering" {
+		t.Errorf("OIDCIssuer = %q", cfg.OIDCIssuer)
 	}
 }
 
@@ -81,6 +119,9 @@ func TestLoadMissingRequired(t *testing.T) {
 		"SQS_WAGER_DLQ_NAME",
 		"FX_START_TIMEOUT",
 		"FX_STOP_TIMEOUT",
+		"OIDC_ISSUER",
+		"OIDC_AUDIENCE",
+		"OIDC_INTERNAL_CLIENT",
 	}
 	for _, key := range keys {
 		t.Run(key, func(t *testing.T) {

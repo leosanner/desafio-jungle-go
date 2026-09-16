@@ -34,6 +34,10 @@ type Config struct {
 	SQSWagerDLQName    string
 	FXStartTimeout     time.Duration
 	FXStopTimeout      time.Duration
+	OIDCIssuer         string
+	OIDCAudience       string
+	OIDCJWKSURL        string
+	OIDCInternalClient string
 }
 
 // Load reads configuration from the environment and validates it.
@@ -60,6 +64,10 @@ func Load() (Config, error) {
 		SQSWagerDLQName:    os.Getenv("SQS_WAGER_DLQ_NAME"),
 		FXStartTimeout:     startTimeout,
 		FXStopTimeout:      stopTimeout,
+		OIDCIssuer:         strings.TrimSpace(os.Getenv("OIDC_ISSUER")),
+		OIDCAudience:       strings.TrimSpace(os.Getenv("OIDC_AUDIENCE")),
+		OIDCJWKSURL:        strings.TrimSpace(os.Getenv("OIDC_JWKS_URL")),
+		OIDCInternalClient: strings.TrimSpace(os.Getenv("OIDC_INTERNAL_CLIENT")),
 	}
 	if err := cfg.Validate(); err != nil {
 		return Config{}, err
@@ -67,8 +75,9 @@ func Load() (Config, error) {
 	return cfg, nil
 }
 
-// Validate checks required fields and enumerations. AWS_ENDPOINT_URL may be empty
-// (real AWS). MIGRATIONS_PATH defaults to ./migrations.
+// Validate checks required fields and enumerations. AWS_ENDPOINT_URL and
+// OIDC_JWKS_URL may be empty (real AWS / JWKS derived from OIDC_ISSUER).
+// MIGRATIONS_PATH defaults to ./migrations.
 func (c *Config) Validate() error {
 	if err := require("LOG_LEVEL", c.LogLevel); err != nil {
 		return err
@@ -98,6 +107,16 @@ func (c *Config) Validate() error {
 		return err
 	}
 	if err := require("SQS_WAGER_DLQ_NAME", c.SQSWagerDLQName); err != nil {
+		return err
+	}
+	c.OIDCIssuer = strings.TrimRight(c.OIDCIssuer, "/")
+	if err := require("OIDC_ISSUER", c.OIDCIssuer); err != nil {
+		return err
+	}
+	if err := require("OIDC_AUDIENCE", c.OIDCAudience); err != nil {
+		return err
+	}
+	if err := require("OIDC_INTERNAL_CLIENT", c.OIDCInternalClient); err != nil {
 		return err
 	}
 	if c.FXStartTimeout <= 0 {

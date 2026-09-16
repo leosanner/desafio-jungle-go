@@ -9,6 +9,7 @@ import (
 var forbiddenDeps = []string{
 	"go.uber.org/fx",
 	"net/http",
+	"github.com/coreos/go-oidc",
 	"github.com/aws/",
 	"github.com/jackc/pgx",
 	"database/sql",
