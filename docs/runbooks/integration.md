@@ -1,8 +1,9 @@
-# Integration tests (TST-04, TST-07, HTTP use cases, Phase 6 outbox, Phase 7 inbound)
+# Integration tests (TST-04, TST-07, HTTP use cases, Phase 6 outbox, Phase 7 inbound, Phase 8 pending)
 
 Postgres constraint, atomicity and HTTP use-case tests use build tag `integration` and a real PostgreSQL.
-Keycloak and SQS are **not** required for TST-04 or the Phase 5 HTTP tests (`TestHTTPPhase5UseCases`,
-`TestHTTPConcurrentSameBet`, `TestHTTPTwoBetsOnHundred`, `TestHTTPDistinctWalletsParallel`).
+Keycloak and SQS are **not** required for TST-04, the Phase 5 HTTP tests (`TestHTTPPhase5UseCases`,
+`TestHTTPConcurrentSameBet`, `TestHTTPTwoBetsOnHundred`, `TestHTTPDistinctWalletsParallel`), or
+Phase 8 pending tests (`TestPending*`).
 
 Phase 6 claim tests (`TestOutboxClaimSkipLocked`, `TestOutboxMarkPublishedAndRetry`) need
 `POSTGRES_DSN` only. Publish/recovery tests (`TestOutboxRelayPublishesOpeningEvents`,
@@ -19,6 +20,11 @@ The publish-before-ack recovery test installs `OutboxRelay.SetAfterPublish` so `
 skipped after a successful `SendMessage` ([ADR 0016](../adr/0016-outbox-claim-and-backoff.md)). That
 hook is tests-only.
 
+Phase 8 pending tests (`TestPendingClaimSkipLocked`, `TestPendingRefundResolvesWhenBetArrives`,
+`TestPendingRefundExpiresReferenceNotFound`, `TestPendingCommittedPendingResumed`,
+`TestPendingTwoResumersOneRefund`) need `POSTGRES_DSN` only. TST-14/15 do not require SQS: inbound
+already deleted the message; the worker claims SQL rows.
+
 OIDC tests (TST-07) use the same tag and a real Keycloak with realm `wagering` imported.
 
 ## Prerequisites
@@ -30,7 +36,7 @@ OIDC tests (TST-07) use the same tag and a real Keycloak with realm `wagering` i
 
 ## Run
 
-Postgres only (TST-04 and HTTP Phase 5):
+Postgres only (TST-04, HTTP Phase 5, Phase 8 pending):
 
 ```sh
 docker compose up -d postgres
@@ -43,7 +49,7 @@ Postgres + LocalStack (Phase 6 outbox publish, TST-13, Phase 7 inbound, TST-12):
 ```sh
 docker compose up -d postgres localstack
 set -a && source .env.example && set +a
-go test -tags=integration ./internal/adapter/postgres/... -run 'TestOutbox|TestInbound|TestHandleInbound'
+go test -tags=integration ./internal/adapter/postgres/... -run 'TestOutbox|TestInbound|TestHandleInbound|TestPending'
 ```
 
 Keycloak (TST-07):
@@ -72,7 +78,8 @@ Files:
 - `internal/adapter/postgres/isolated_db_integration_test.go` — one `wagering_it_*` database per test (does not migrate the Compose `wagering` database)
 - `internal/adapter/postgres/outbox_integration_test.go` — claim `SKIP LOCKED`, relay publish, two publishers (TST-13), publish-before-ack recovery
 - `internal/adapter/postgres/inbound_integration_test.go` — inbox atomicity, consume, TST-12 skip-delete, DLQ, HTTP×SQS, application dedup
-- `internal/composition/start_stop_integration_test.go` — Fx start/stop including the outbox and inbound workers
+- `internal/adapter/postgres/pending_integration_test.go` — pending claim `SKIP LOCKED`, TST-14 resolution/expiry, TST-15 `PENDING` resume
+- `internal/composition/start_stop_integration_test.go` — Fx start/stop including the outbox, inbound and pending workers
 - `internal/adapter/auth/oidc_integration_test.go` — `TestOIDCVerifierRealIdP`
 - `internal/adapter/http/auth_integration_test.go` — `TestAuthRealIdP` (missing/invalid token, isolation, internal restriction, no wallet writes on 403)
 

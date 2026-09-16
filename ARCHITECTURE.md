@@ -5,10 +5,11 @@
 
 ## Overview
 
-Phase 7 of a Go + Uber Fx wagering service: hexagonal layout, stdlib HTTP, PostgreSQL via `pgx`,
+Phase 8 of a Go + Uber Fx wagering service: hexagonal layout, stdlib HTTP, PostgreSQL via `pgx`,
 golang-migrate, LocalStack SQS queues, a **pure domain model**, **financial persistence**, **OIDC
-authentication**, **HTTP use cases**, a **concurrent outbox publisher**, and an **SQS inbound
-consumer** with a transactional inbox. There is still no pending-reference worker.
+authentication**, **HTTP use cases**, a **concurrent outbox publisher**, an **SQS inbound
+consumer** with a transactional inbox, and a **pending-reference worker** that resumes `PENDING` /
+`PENDING_REFERENCE`.
 
 - Module: `github.com/leosanner/desafio-jungle-go` ([ADR 0001](docs/adr/0001-package-layout-and-layer-boundaries.md))
 - Go 1.25, `net/http` ServeMux, `log/slog` JSON ([ADR 0002](docs/adr/0002-go-version-and-http-router.md))
@@ -98,13 +99,20 @@ Internal IDs are UUID v7 generated in `internal/app` (stdlib `crypto/rand`, no e
 do not transition. Origin `INTERNAL` (`OPENING`) vs `EXTERNAL`. Failure classes: Validation,
 Rejection, Wait, Transient, Permanent.
 
-Durable `PENDING` resumption is a persistence concern (later).
+Durable `PENDING` resumption is the pending-reference worker ([ADR 0019](docs/adr/0019-pending-reference-resume.md)).
 
 ## Pending references
 
 Wait vs unsuccessful reference is in [ADR 0007](docs/adr/0007-wager-transaction-state-machine.md):
 missing or still-pending reference → `PENDING_REFERENCE`; `REJECTED`/`FAILED` reference →
-`REFERENCE_UNSUCCESSFUL`. Backoff, max attempts/TTL and `REFERENCE_NOT_FOUND` — _TBD_ (Phase 8).
+`REFERENCE_UNSUCCESSFUL`.
+
+**Proposed:** [ADR 0019](docs/adr/0019-pending-reference-resume.md). A worker claims due
+`PENDING` / `PENDING_REFERENCE` rows with `SELECT … FOR UPDATE SKIP LOCKED`, leases via
+`next_attempt_at`, and re-runs Apply with wallet-first locking. Exponential backoff on still-waiting.
+Max attempts or TTL → `REJECTED` / `REFERENCE_NOT_FOUND`. First wait emits
+`WagerTransactionPendingReference`; retries do not. Contract:
+[`docs/events/pending-references.md`](docs/events/pending-references.md).
 
 ## Reversals
 
@@ -170,7 +178,7 @@ SQS is gated by AWS credentials (LocalStack dummies in Compose). The inbound con
 - `OnStop` runs in reverse order; hooks live on the resource constructor.
 - Outbox worker: cancel poll, finish the in-flight batch within a lease-bounded context, wait on `done`.
 - Inbound worker: cancel long-poll, finish or release visibility of the in-flight message, wait on `done`.
-  Pending-reference workers remain later.
+- Pending worker: cancel poll, finish the in-flight batch within a lease-bounded context, wait on `done`.
 
 [ADR 0004](docs/adr/0004-fx-lifecycle-and-shutdown.md).
 
@@ -190,11 +198,9 @@ Reconciliation divergences are logged (`walletId`, entry count, no full payload)
 
 ## Limitations, interpretations and unfinished work
 
-Phase 7 adds the SQS inbound consumer and inbox. Still unfinished:
+Phase 8 adds the pending-reference worker. Still unfinished:
 
-- No pending-reference worker. `PENDING_REFERENCE` is persisted, the SQS message is deleted, and
-  HTTP returns `202` until Phase 8 resumes it.
-- ADRs 0006–0018 are **Proposed** until confirmed.
+- ADRs 0006–0019 are **Proposed** until confirmed.
 - STK-05 is documented and implemented: `pgx/v5` ([ADR 0003](docs/adr/0003-database-access-and-migrations.md)),
   `BIGINT` minor units ([ADR 0006](docs/adr/0006-money-representation.md), migration `000002`),
   unit of work ([ADR 0009](docs/adr/0009-sql-unit-of-work.md)), outbox insert ([ADR 0014](docs/adr/0014-outbox-persistence.md),
@@ -206,6 +212,8 @@ Phase 7 adds the SQS inbound consumer and inbox. Still unfinished:
   for publish). Phase 7 inbound: `TestInboundConsumerProcessesBet`, `TestInboundRecoverCommitBeforeDelete`,
   `TestInboundInvalidMessageGoesToDLQ`, `TestInboundHTTPxSQSSameKeyOneDebit` (`POSTGRES_DSN` + LocalStack).
   TST-07 needs Keycloak and `OIDC_ISSUER`.
+  Phase 8 pending: `TestPendingRefundResolvesWhenBetArrives`, `TestPendingRefundExpiresReferenceNotFound`,
+  `TestPendingCommittedPendingResumed` (`POSTGRES_DSN` only).
   Multi-instance runs remain Phase 9
   ([ADR 0005](docs/adr/0005-test-strategy-initial.md)).
 - Health endpoints stay public.

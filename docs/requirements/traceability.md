@@ -31,9 +31,9 @@ the `spec-audit` skill or when completing a deliverable.
 | STK-05 | DB library, `Money` mapping and cross-repository transaction documented | ✅ | [ADR 0003](../adr/0003-database-access-and-migrations.md) (`pgx/v5`); [ADR 0006](../adr/0006-money-representation.md) (`int64` cents → `BIGINT`, Proposed); [ADR 0009](../adr/0009-sql-unit-of-work.md) (Proposed); `internal/app/ports.go` (`UnitOfWork`); `internal/adapter/postgres/uow.go`; `migrations/000002_financial_schema.up.sql`; `TestMapError`; `TestUnitOfWorkAtomicity` | ADRs 0006/0009 still Proposed |
 | FX-01 | Composition via `fx.Module`, `fx.Provide`, `fx.Invoke` with constructors | ✅ | `internal/composition/`; `cmd/wagering/main.go`; `TestValidateApp`; [ADR 0004](../adr/0004-fx-lifecycle-and-shutdown.md) | |
 | FX-02 | Config and dependency validation on start | ✅ | `internal/config/`; `TestInvalidConfigFailsStart`; [ADR 0004](../adr/0004-fx-lifecycle-and-shutdown.md) | |
-| FX-03 | Workers with cancellation, deadlines and observable termination | ✅ | `OutboxWorker` (`internal/composition/outbox.go`); `InboundWorker` (`internal/composition/inbound.go`); `TestOutboxWorkerStartStopClosesDone`; `TestConsumerRunStopsOnCancel`; `TestAppStartStop` | |
-| FX-04 | Shutdown: stops input, finishes/releases in-flight work | ✅ | HTTP `Shutdown`; outbox worker cancel + wait on `done`; inbound worker cancel + wait, `ReleaseInFlight` on deadline ([ADR 0018](../adr/0018-sqs-inbound-consume.md)) |
-| FX-05 | Dependencies close after the components using them | ✅ | Outbox then inbound then HTTP registered after postgres so `OnStop` is HTTP → inbound → outbox → pool |
+| FX-03 | Workers with cancellation, deadlines and observable termination | ✅ | `OutboxWorker` (`internal/composition/outbox.go`); `InboundWorker` (`internal/composition/inbound.go`); `PendingWorker` (`internal/composition/pending.go`); `TestOutboxWorkerStartStopClosesDone`; `TestPendingWorkerStartStopClosesDone`; `TestConsumerRunStopsOnCancel`; `TestAppStartStop` | |
+| FX-04 | Shutdown: stops input, finishes/releases in-flight work | ✅ | HTTP `Shutdown`; outbox worker cancel + wait on `done`; inbound worker cancel + wait, `ReleaseInFlight` on deadline ([ADR 0018](../adr/0018-sqs-inbound-consume.md)); pending worker cancel + wait ([ADR 0019](../adr/0019-pending-reference-resume.md)) |
+| FX-05 | Dependencies close after the components using them | ✅ | Outbox then inbound then pending then HTTP registered after postgres so `OnStop` is HTTP → pending → inbound → outbox → pool |
 | FX-06 | Domain independent of Fx, HTTP, SQS and persistence | ✅ | `internal/domain/deps_test.go`; [ADR 0001](../adr/0001-package-layout-and-layer-boundaries.md) | |
 
 ## Authentication and authorization (§2)
@@ -86,7 +86,7 @@ the `spec-audit` skill or when completing a deliverable.
 | WTX-01 | External transaction fields persisted (ids, provider, key, hash, round, game, reference, result) | ✅ | `internal/domain/transaction.go`; `migrations/000002_financial_schema.up.sql`; `internal/adapter/postgres/transaction.go` (insert/scan of ids, provider, key, hash, round, game, reference, result) | | |
 | WTX-02 | Validated state machine; immutable terminal states; documented | ✅ | [ADR 0007](../adr/0007-wager-transaction-state-machine.md); `TestStateMachineTransitions`; `TestRejectedIsTerminal` | | |
 | WTX-03 | Replay returns persisted result without re-applying | ✅ | Rehydration does not re-apply; `ResultBalance` snapshot; `TestSubmitReplayAndConflicts`; `TestHTTPPhase5UseCases` | |
-| WTX-04 | `PENDING` durably resumable by another instance | — | | |
+| WTX-04 | `PENDING` durably resumable by another instance | ✅ | `PendingResumer` claims committed `PENDING` ([ADR 0019](../adr/0019-pending-reference-resume.md)); `TestResumeDueCommittedPending`; `TestPendingCommittedPendingResumed` (new `Service` on the same DB) |
 | WTX-05 | `OPENING` rejected via HTTP/SQS; schema distinguishes internal/external; no duplicate opening credit | ✅ | Domain: `NewExternalTransaction` / `Apply` reject `OPENING`; `TestNewExternalTransactionRejectsOpening`. Schema: `000002` origin CHECKs. HTTP: `ParseKind` + constructor. SQS: `ParseInbound` (`TestParseInboundRejectsInvalid`) |
 | WTX-06 | Transient vs permanent failure distinction documented | ✅ | [ADR 0007](../adr/0007-wager-transaction-state-machine.md); `FailureClass` | | |
 | LED-01 | Entry fields and `balanceAfter = balanceBefore ± money` validation | ✅ | `NewLedgerEntry`; `TestLedgerValidatesInvariant` | | |
@@ -109,9 +109,9 @@ the `spec-audit` skill or when completing a deliverable.
 | OPS-07 | Reference matches provider, player, wallet, currency, round and amount | ✅ | `TestApplyReferenceMismatch` | | |
 | OPS-08 | No two successful reversals of the same kind; REFUND/ROLLBACK combinations documented | ✅ | [ADR 0008](../adr/0008-refund-rollback-combinations.md); `TestApplyDuplicateRefundRejected`; `TestApplyRefundAndRollbackOfSameBetMutuallyExclusive` | | |
 | OPS-09 | Reversal without funds rejected and auditable with its own `failureCode` | ✅ | `TestApplyRollbackOfWinWithoutFunds` (`INSUFFICIENT_FUNDS_REVERSAL`) | | |
-| OPS-10 | `PENDING_REFERENCE` with worker and exponential backoff, survives restart | — | | |
-| OPS-11 | Max attempts/TTL → `REJECTED` with reference-not-found code + event | — | | |
-| OPS-12 | Behavior with a pending or unsuccessful reference documented | ✅ | [ADR 0007](../adr/0007-wager-transaction-state-machine.md); `TestApplyPendingAndUnsuccessfulReference` | | |
+| OPS-10 | `PENDING_REFERENCE` with worker and exponential backoff, survives restart | ✅ | `PendingWorker` (`internal/composition/pending.go`); claim `SKIP LOCKED` + `Backoff` ([ADR 0019](../adr/0019-pending-reference-resume.md)); `TestResumeDueResolvesWhenReferenceArrives`; `TestPendingRefundResolvesWhenBetArrives` |
+| OPS-11 | Max attempts/TTL → `REJECTED` with reference-not-found code + event | ✅ | `REFERENCE_NOT_FOUND`; `TestResumeDueExpiresReferenceNotFound`; `TestResumeDueTTLExpires`; `TestPendingRefundExpiresReferenceNotFound`; [failure-codes.md](../api/failure-codes.md) |
+| OPS-12 | Behavior with a pending or unsuccessful reference documented | ✅ | [ADR 0007](../adr/0007-wager-transaction-state-machine.md); [ADR 0019](../adr/0019-pending-reference-resume.md); [pending-references.md](../events/pending-references.md); `TestApplyPendingAndUnsuccessfulReference` | | |
 | OPS-13 | Stable, documented `failureCode`, correctable × definitive | ✅ | [`docs/api/failure-codes.md`](../api/failure-codes.md); `TestFailureCodeCorrectableVsDefinitive` | HTTP mapping later | |
 
 ## Concurrency (§8)
@@ -184,7 +184,7 @@ the `spec-audit` skill or when completing a deliverable.
 | TST-02 | Unit: wallet invariants and state transitions | ✅ | `wallet_test.go`; `transaction_test.go` | | |
 | TST-03 | Unit: rules for the 5 kinds, zero policy, internal opening, payload conflict | ✅ | `apply_test.go`; `TestOpenWallet*`; `TestIdempotencyPayloadConflict` | | |
 | TST-04 | Integration: migrations, constraints, immutability, atomicity | ✅ | `TestMigrationsUpAndDown`; `TestFinancialSchemaConstraints`; `TestLedgerAppendOnly`; `TestUnitOfWorkAtomicity`; `go test -tags=integration ./internal/adapter/postgres/...` with `POSTGRES_DSN`. [integration.md](../runbooks/integration.md) | Skip-if-no-env; Keycloak/SQS not required |
-| TST-05 | Integration: inbox, redelivery, concurrent outbox, retry, DLQ, recovery | 🚧 | Concurrent outbox: `TestOutboxTwoPublishersContend`, `TestOutboxRecoverPublishBeforeAck`. Inbox/redelivery/DLQ: `TestHandleInboundInboxAtomicWithDomain`, `TestInboundRecoverCommitBeforeDelete`, `TestInboundInvalidMessageGoesToDLQ`. PENDING restart still Phase 8 |
+| TST-05 | Integration: inbox, redelivery, concurrent outbox, retry, DLQ, recovery | ✅ | Concurrent outbox: `TestOutboxTwoPublishersContend`, `TestOutboxRecoverPublishBeforeAck`. Inbox/redelivery/DLQ: `TestHandleInboundInboxAtomicWithDomain`, `TestInboundRecoverCommitBeforeDelete`, `TestInboundInvalidMessageGoesToDLQ`. PENDING restart: `TestPendingCommittedPendingResumed` |
 | TST-06 | Integration: Fx composition, start/stop and resource release | ✅ | `TestValidateApp`; `TestInvalidConfigFailsStart`; `TestAppStartStop` (`-tags=integration`); `TestOutboxWorkerStartStopClosesDone` | |
 | TST-07 | Auth: real IdP; missing/invalid/expired; isolation; internal restriction; no effects | ✅ | Unit: `internal/adapter/auth/verifier_test.go`, `internal/adapter/http/auth_test.go` (expired, HMAC, isolation, no handler on 401). Integration: `TestOIDCVerifierRealIdP`, `TestAuthRealIdP` (`-tags=integration`, `OIDC_ISSUER`). Expired covered in unit tests (real Keycloak tokens are not expired) | |
 | TST-08 | Same bet 50× in parallel → one debit | ✅ | `TestHTTPConcurrentSameBet` (`-tags=integration`, `POSTGRES_DSN`) | |
@@ -193,8 +193,8 @@ the `spec-audit` skill or when completing a deliverable.
 | TST-11 | Scenarios with ≥3 instances | — | | |
 | TST-12 | Consumer interrupted after commit and before delete | ✅ | `TestInboundRecoverCommitBeforeDelete` (`Consumer.SetAfterCommit`) | |
 | TST-13 | Two publishers contending for the outbox | ✅ | `TestOutboxTwoPublishersContend`; `TestOutboxClaimSkipLocked` | |
-| TST-14 | Reversal before its reference → resolution or expiry | — | | |
-| TST-15 | Restart preserves idempotency, pending work and consistency; `PENDING` resumed | — | | |
+| TST-14 | Reversal before its reference → resolution or expiry | ✅ | `TestResumeDueResolvesWhenReferenceArrives`; `TestResumeDueExpiresReferenceNotFound`; `TestPendingRefundResolvesWhenBetArrives`; `TestPendingRefundExpiresReferenceNotFound` (`-tags=integration`, `POSTGRES_DSN`) |
+| TST-15 | Restart preserves idempotency, pending work and consistency; `PENDING` resumed | ✅ | `TestResumeDueCommittedPending`; `TestPendingCommittedPendingResumed` (insert `PENDING`, new `Service` resumes, same-key replay, ledger/balance) |
 | TST-16 | Balance vs ledger at the end; scenarios crossing HTTP and SQS | ✅ | `TestReconcileWalletConsistent`; HTTP reconciliation in `TestHTTPPhase5UseCases`; `TestInboundHTTPxSQSSameKeyOneDebit`; `TestHandleInboundHTTPThenSQSSameKey` | |
 | TST-17 | Duplicate tests exercise application-level deduplication | ✅ | `TestHTTPConcurrentSameBet`; `TestSubmitReplayAndConflicts`; `TestInboundDuplicateSQSCopiesOneDebit` (distinct FIFO dedup ids, same envelope `messageId`) | |
 | TST-18 | `go test -race` on applicable tests | ✅ | `go test -race ./...` including `internal/domain` | |
@@ -204,10 +204,10 @@ the `spec-audit` skill or when completing a deliverable.
 | ID | Requirement | Status | Evidence | Notes |
 | --- | --- | --- | --- | --- |
 | ENT-01 | Reproducible from a clean checkout | 🚧 | [README](../../README.md) | Phase 1 instructions written; Compose/image/binary owned by other agents |
-| ENT-02 | README: prerequisites, env, queues, migrations, running, examples, tests | 🚧 | [README.md](../../README.md) | Phase 7 consume documented; pending-reference later |
+| ENT-02 | README: prerequisites, env, queues, migrations, running, examples, tests | 🚧 | [README.md](../../README.md) | Phase 8 pending worker documented; observability later |
 | ENT-03 | `.env.example` without real secrets | ✅ | `.env.example` | Local dummy keys only |
 | ENT-04 | Automatic IdP provisioning and test identities | ✅ | `docker/keycloak/realm-wagering.json`; Compose `--import-realm`; [auth.md](../api/auth.md); [README](../../README.md) Authentication | Local dummy client secrets |
-| ENT-05 | ARCHITECTURE.md with decisions, limitations, interpretations and unfinished work | 🚧 | [ARCHITECTURE.md](../../ARCHITECTURE.md); [docs/adr/](../adr/) | Phase 7 consumer summarized; ADRs 0006–0018 Proposed |
+| ENT-05 | ARCHITECTURE.md with decisions, limitations, interpretations and unfinished work | 🚧 | [ARCHITECTURE.md](../../ARCHITECTURE.md); [docs/adr/](../adr/) | Phase 8 worker summarized; ADRs 0006–0019 Proposed |
 | ENT-06 | `docker compose up --build`, `go test ./...`, `go test -race ./...`, `go vet ./...` | ✅ | [README](../../README.md); Compose stack healthy; unit/`vet`/`-race` pass | |
 | ENT-07 | Separate docs: test dependencies, integration, multiple instances, failures, build tags | 🚧 | [test-dependencies.md](../runbooks/test-dependencies.md); [integration.md](../runbooks/integration.md); [ADR 0005](../adr/0005-test-strategy-initial.md) | TST-04 and TST-07 runbooks; multi-instance / failure runbooks still placeholders |
 | ENT-08 | `gofmt`-formatted code and reproducible dependencies | 🚧 | [ADR 0005](../adr/0005-test-strategy-initial.md); `gofmt -l .` in README | Domain added in Phase 2 |

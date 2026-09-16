@@ -3,8 +3,8 @@
 Go + Uber Fx service that processes financial operations from game providers via HTTP and SQS, backed by
 PostgreSQL, Keycloak and LocalStack. Full challenge statement (in Portuguese) in [`init.md`](init.md).
 
-> Phase 7: process skeleton, domain, financial persistence, OIDC, HTTP use cases, concurrent
-> outbox publisher, and **SQS inbound consumer** (inbox + DLQ). No pending-reference worker yet.
+> Phase 8: process skeleton, domain, financial persistence, OIDC, HTTP use cases, concurrent
+> outbox publisher, SQS inbound consumer (inbox + DLQ), and the **pending-reference worker**.
 > See [`docs/roadmap.md`](docs/roadmap.md).
 
 ## Prerequisites
@@ -40,6 +40,12 @@ Copy [`.env.example`](.env.example) and adjust. Do not commit real secrets.
 | `SQS_VISIBILITY_TIMEOUT` | Inbound message visibility / in-flight deadline (e.g. `30s`) |
 | `SQS_WAIT_TIME` | Receive long-poll wait (max `20s`) |
 | `SQS_BACKOFF_MAX` | Cap for inbound visibility backoff (e.g. `20s`) |
+| `PENDING_POLL_INTERVAL` | Pending-reference worker poll interval (e.g. `250ms`) |
+| `PENDING_BATCH_SIZE` | Max `PENDING` / `PENDING_REFERENCE` rows claimed per tick |
+| `PENDING_LEASE` | Claim lease / in-flight resume deadline (e.g. `30s`) |
+| `PENDING_BACKOFF_MAX` | Cap for exponential pending retry backoff (e.g. `1m`) |
+| `PENDING_MAX_ATTEMPTS` | Max claim attempts before `REFERENCE_NOT_FOUND` |
+| `PENDING_TTL` | Max age from `created_at` before `REFERENCE_NOT_FOUND` |
 | `OIDC_ISSUER` | Expected JWT `iss` (Keycloak realm URL, no trailing slash) |
 | `OIDC_AUDIENCE` | Expected JWT `aud` (`wagering-api`) |
 | `OIDC_JWKS_URL` | Optional JWKS URL; defaults to `{OIDC_ISSUER}/protocol/openid-connect/certs` |
@@ -183,7 +189,8 @@ That skip is not a substitute for CI with real containers.
 (`TestOutbox*` in `internal/adapter/postgres`) needs `POSTGRES_DSN` plus LocalStack
 (`AWS_ENDPOINT_URL` and AWS dummy keys) for publish tests; claim/SKIP LOCKED tests need Postgres
 only. **Phase 7 inbound** (`TestInbound*` in `internal/adapter/postgres`) needs `POSTGRES_DSN` and
-LocalStack. **TST-07** (auth against the real IdP) needs Keycloak and `OIDC_ISSUER`:
+LocalStack. **Phase 8 pending** (`TestPending*` in `internal/adapter/postgres`) needs `POSTGRES_DSN`
+only. **TST-07** (auth against the real IdP) needs Keycloak and `OIDC_ISSUER`:
 
 ```sh
 docker compose up -d postgres keycloak localstack
