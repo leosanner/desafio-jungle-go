@@ -39,6 +39,9 @@ type stubTransactions struct{}
 func (stubTransactions) GetByID(context.Context, string) (domain.WagerTransaction, error) {
 	return domain.WagerTransaction{}, app.ErrNotFound
 }
+func (stubTransactions) GetByIDForUpdate(context.Context, string) (domain.WagerTransaction, error) {
+	return domain.WagerTransaction{}, app.ErrNotFound
+}
 func (stubTransactions) GetByProviderExternalID(context.Context, string, string) (domain.WagerTransaction, error) {
 	return domain.WagerTransaction{}, app.ErrNotFound
 }

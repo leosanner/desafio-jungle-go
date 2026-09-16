@@ -148,34 +148,7 @@ func (s *Service) submitInTx(ctx context.Context, repos Repositories, cmd Submit
 		return domain.WagerTransaction{}, false, err
 	}
 
-	var ref *domain.WagerTransaction
-	lookedUp := cmd.ReferenceExternalID != ""
-	if lookedUp {
-		r, err := repos.Transactions.GetByProviderExternalID(ctx, cmd.ProviderID, cmd.ReferenceExternalID)
-		if err == nil {
-			ref = &r
-		} else if !errors.Is(err, ErrNotFound) {
-			return domain.WagerTransaction{}, false, err
-		}
-	}
-
-	var reversals []domain.WagerTransaction
-	if ref != nil {
-		reversals, err = repos.Transactions.ListProcessedReversals(ctx, ref.ID())
-		if err != nil {
-			return domain.WagerTransaction{}, false, err
-		}
-	}
-
-	applied, err := domain.Apply(domain.ApplyInput{
-		Wallet:             &wallet,
-		Operation:          op,
-		Reference:          ref,
-		ReferenceLookedUp:  lookedUp,
-		ProcessedReversals: reversals,
-		LedgerID:           s.ids.NewID(),
-		Now:                now,
-	})
+	applied, err := s.applyInTx(ctx, repos, wallet, op)
 	if err != nil {
 		return domain.WagerTransaction{}, false, err
 	}
@@ -185,10 +158,42 @@ func (s *Service) submitInTx(ctx context.Context, repos Repositories, cmd Submit
 		return domain.WagerTransaction{}, false, err
 	}
 
-	if err := persistApply(ctx, repos, wallet, applied, recs); err != nil {
+	if err := persistApply(ctx, repos, wallet, applied, recs, false); err != nil {
 		return domain.WagerTransaction{}, false, err
 	}
 	return applied.Operation, false, nil
+}
+
+func (s *Service) applyInTx(ctx context.Context, repos Repositories, wallet domain.Wallet, op domain.WagerTransaction) (domain.ApplyResult, error) {
+	var ref *domain.WagerTransaction
+	lookedUp := op.ReferenceExternalID() != ""
+	if lookedUp {
+		r, err := repos.Transactions.GetByProviderExternalID(ctx, op.ProviderID(), op.ReferenceExternalID())
+		if err == nil {
+			ref = &r
+		} else if !errors.Is(err, ErrNotFound) {
+			return domain.ApplyResult{}, err
+		}
+	}
+
+	var reversals []domain.WagerTransaction
+	if ref != nil {
+		list, err := repos.Transactions.ListProcessedReversals(ctx, ref.ID())
+		if err != nil {
+			return domain.ApplyResult{}, err
+		}
+		reversals = list
+	}
+
+	return domain.Apply(domain.ApplyInput{
+		Wallet:             &wallet,
+		Operation:          op,
+		Reference:          ref,
+		ReferenceLookedUp:  lookedUp,
+		ProcessedReversals: reversals,
+		LedgerID:           s.ids.NewID(),
+		Now:                s.clock.Now(),
+	})
 }
 
 func (s *Service) loadReplay(ctx context.Context, cmd SubmitCommand, hash string) (SubmitResult, error) {

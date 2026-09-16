@@ -31,8 +31,12 @@ func persistOutbox(ctx context.Context, repos Repositories, recs []OutboxRecord)
 	return nil
 }
 
-func persistApply(ctx context.Context, repos Repositories, loaded domain.Wallet, res domain.ApplyResult, recs []OutboxRecord) error {
-	if err := repos.Transactions.Insert(ctx, res.Operation); err != nil {
+func persistApply(ctx context.Context, repos Repositories, loaded domain.Wallet, res domain.ApplyResult, recs []OutboxRecord, existing bool) error {
+	if existing {
+		if err := repos.Transactions.Update(ctx, res.Operation); err != nil {
+			return err
+		}
+	} else if err := repos.Transactions.Insert(ctx, res.Operation); err != nil {
 		return err
 	}
 	if res.Ledger != nil {

@@ -97,6 +97,10 @@ func (r memTx) GetByID(_ context.Context, id string) (domain.WagerTransaction, e
 	return tx, nil
 }
 
+func (r memTx) GetByIDForUpdate(ctx context.Context, id string) (domain.WagerTransaction, error) {
+	return r.GetByID(ctx, id)
+}
+
 func (r memTx) GetByProviderExternalID(_ context.Context, providerID, externalID string) (domain.WagerTransaction, error) {
 	id, ok := r.s.byExt[providerID+"|"+externalID]
 	if !ok {

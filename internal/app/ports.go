@@ -85,6 +85,9 @@ type WalletRepository interface {
 // TransactionRepository loads and persists WagerTransaction rows.
 type TransactionRepository interface {
 	GetByID(ctx context.Context, id string) (domain.WagerTransaction, error) // ErrNotFound
+	// GetByIDForUpdate locks the row so resume cannot race a concurrent Apply
+	// after the wallet lock is held (ADR 0019).
+	GetByIDForUpdate(ctx context.Context, id string) (domain.WagerTransaction, error) // ErrNotFound
 	GetByProviderExternalID(ctx context.Context, providerID, externalID string) (domain.WagerTransaction, error)
 	GetByProviderIdempotencyKey(ctx context.Context, providerID, key string) (domain.WagerTransaction, error)
 	// ListProcessedReversals returns PROCESSED REFUND/ROLLBACK rows that resolved
@@ -157,6 +160,21 @@ type OutboxClaimer interface {
 	Claim(ctx context.Context, limit int, now time.Time, lease time.Duration) ([]OutboxRecord, error)
 	MarkPublished(ctx context.Context, eventID string, at time.Time) error
 	ScheduleRetry(ctx context.Context, eventID string, nextAttempt time.Time) error
+}
+
+// PendingWork is one claimed PENDING / PENDING_REFERENCE row (ADR 0019).
+type PendingWork struct {
+	TransactionID string
+	WalletID      string
+	Attempts      int
+	CreatedAt     time.Time
+	Status        domain.Status
+}
+
+// PendingClaimer claims due pending rows outside the financial unit of work.
+type PendingClaimer interface {
+	Claim(ctx context.Context, limit int, now time.Time, lease time.Duration) ([]PendingWork, error)
+	ScheduleRetry(ctx context.Context, transactionID string, nextAttempt time.Time) error
 }
 
 // EventBus publishes a wire envelope to the configured destination.

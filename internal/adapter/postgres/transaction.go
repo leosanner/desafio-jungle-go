@@ -22,6 +22,11 @@ func (r *transactionRepo) GetByID(ctx context.Context, id string) (domain.WagerT
 	return scanTransaction(r.q.QueryRow(ctx, q, id))
 }
 
+func (r *transactionRepo) GetByIDForUpdate(ctx context.Context, id string) (domain.WagerTransaction, error) {
+	const q = `SELECT ` + transactionColumns + ` FROM wagering.wager_transactions WHERE id = $1 FOR UPDATE`
+	return scanTransaction(r.q.QueryRow(ctx, q, id))
+}
+
 func (r *transactionRepo) GetByProviderExternalID(ctx context.Context, providerID, externalID string) (domain.WagerTransaction, error) {
 	const q = `SELECT ` + transactionColumns + `
 		FROM wagering.wager_transactions
