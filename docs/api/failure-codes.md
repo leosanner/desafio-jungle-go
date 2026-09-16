@@ -1,7 +1,8 @@
 # Failure codes
 
-Stable `failureCode` values produced by the domain (`init.md` §7, OPS-13). HTTP status mapping is
-deferred to the HTTP phase. Codes are classifiable in Go via `domain.ClassifiedError` (`errors.As`).
+Stable `failureCode` values produced by the domain (`init.md` §7, OPS-13). HTTP mapping:
+[ADR 0013](../adr/0013-http-status-mapping.md), [status.md](status.md). Codes are classifiable in
+Go via `domain.ClassifiedError` (`errors.As`).
 
 Correctable codes mean the client can fix the request and send a **new** operation. Definitive codes
 are recorded outcomes (`REJECTED`) that replay must return unchanged.
@@ -30,6 +31,10 @@ are recorded outcomes (`REJECTED`) that replay must return unchanged.
 | `DUPLICATE_EXTERNAL_TRANSACTION` | Rejection | no | Same `(providerId, externalTransactionId)` under another key |
 | `INVALID_TRANSITION` | Rejection | no | Transition from a terminal status |
 | `LEDGER_INVARIANT` | Validation | yes | `balanceAfter != balanceBefore ± money` (corrupt input) |
+
+HTTP: domain `Validation` → `400`; `IDEMPOTENCY_PAYLOAD_CONFLICT` and `DUPLICATE_EXTERNAL_TRANSACTION`
+→ `409`; other persisted `Rejection` → `422` with the operation result. `Wait` (`PENDING_REFERENCE`)
+→ `202`.
 
 `PENDING_REFERENCE` is not a failure code: missing or still-pending references wait (class `Wait`).
 `REFERENCE_NOT_FOUND` after TTL is Phase 8.

@@ -3,9 +3,9 @@
 Go + Uber Fx service that processes financial operations from game providers via HTTP and SQS, backed by
 PostgreSQL, Keycloak and LocalStack. Full challenge statement (in Portuguese) in [`init.md`](init.md).
 
-> Phase 4: process skeleton, pure domain, financial persistence, and **OIDC authentication**
-> (Keycloak `client_credentials`, JWKS). Business routes are registered and authorized; financial
-> handlers still return `501`. See [`docs/roadmap.md`](docs/roadmap.md).
+> Phase 5: process skeleton, domain, financial persistence, OIDC, and **HTTP use cases**
+> (wallets, wagering operations, idempotency, ledger, reconciliation). Outbox rows are persisted;
+> the publisher worker is Phase 6. See [`docs/roadmap.md`](docs/roadmap.md).
 
 ## Prerequisites
 
@@ -80,6 +80,7 @@ The app applies golang-migrate **Up** on start from `MIGRATIONS_PATH`.
 | --- | --- |
 | `000001_bootstrap` | Schema `wagering` |
 | `000002_financial_schema` | `wallets`, `wager_transactions`, `wallet_ledger_entries` (BIGINT minor units, uniqueness/check constraints, append-only ledger trigger) |
+| `000003_outbox` | `outbox_events` (unpublished rows; publisher in Phase 6) |
 
 Rollback is **not** run on shutdown. Using the [golang-migrate CLI](https://github.com/golang-migrate/migrate):
 
@@ -133,7 +134,19 @@ curl -sS -o /tmp/ready.json -w "%{http_code}\n" http://localhost:8080/health/rea
   including once shutdown has started.
 
 Full contract: [`docs/api/health.md`](docs/api/health.md). Business routes require a Bearer token
-([`docs/api/auth.md`](docs/api/auth.md)) and return `501` until Phase 5 implements the use cases.
+([`docs/api/auth.md`](docs/api/auth.md)). Wallets: [`docs/api/wallets.md`](docs/api/wallets.md).
+Operations: [`docs/api/wagering.md`](docs/api/wagering.md).
+
+```sh
+INTERNAL_TOKEN=$(curl -sS -X POST http://localhost:8081/realms/wagering/protocol/openid-connect/token \
+  -d grant_type=client_credentials -d client_id=wagering-internal -d client_secret=internal-secret \
+  | python3 -c 'import json,sys; print(json.load(sys.stdin)["access_token"])')
+curl -sS -X POST http://localhost:8080/wallets \
+  -H "Authorization: Bearer $INTERNAL_TOKEN" -H "Content-Type: application/json" \
+  -d '{"playerId":"0192f28f-5dc0-7d58-bdb2-814ad6a0f4a1","initialBalance":{"amount":"1000.00","currency":"BRL"}}'
+```
+
+Use host `.env.example` issuer/ports when the binary runs on the host (not the Compose-internal Keycloak URL).
 
 ## Tests
 
@@ -151,8 +164,9 @@ gofmt -l .
 Integration tests use build tag `integration`. They skip if required env is unset (`skip-if-no-env`).
 That skip is not a substitute for CI with real containers.
 
-**TST-04** (postgres migrations, constraints, ledger immutability, financial atomicity) needs
-`POSTGRES_DSN` only. **TST-07** (auth against the real IdP) needs Keycloak and `OIDC_ISSUER`:
+**TST-04** (postgres migrations, constraints, ledger immutability, financial atomicity) and
+**Phase 5 HTTP** (`TestHTTPPhase5UseCases`, concurrency) need `POSTGRES_DSN` only. **TST-07**
+(auth against the real IdP) needs Keycloak and `OIDC_ISSUER`:
 
 ```sh
 docker compose up -d postgres keycloak localstack

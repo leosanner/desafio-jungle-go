@@ -42,18 +42,18 @@ Taken from the JWT `azp` (OAuth client id). If `azp` equals `OIDC_INTERNAL_CLIEN
 | `POST /wallets`, `GET /wallets/{walletId}`, `GET /wallets/{walletId}/ledger`, `POST /wallets/{walletId}/reconciliation` | Internal client only |
 | `POST /wagering/transactions` | Provider clients only; JSON `providerId` must match `azp` when present |
 | `GET /providers/{providerId}/wagering/transactions/{externalTransactionId}` | Internal, or the provider whose `azp` equals the path `{providerId}` |
-| `GET /wagering/transactions/{transactionId}` | Any authenticated actor (ownership check in Phase 5) |
+| `GET /wagering/transactions/{transactionId}` | Internal: any row. Provider: own `providerId` only; otherwise `404` (no existence leak) |
 
-Financial handlers are not implemented in Phase 4: after a successful gate the stub returns `501`.
+Financial handlers are implemented in Phase 5 ([wallets.md](wallets.md), [wagering.md](wagering.md),
+[status.md](status.md)).
 
 ## Status catalog (auth)
 
 | Status | `error` | When |
 | --- | --- | --- |
 | `401` | `unauthenticated` | Missing header, malformed `Bearer`, invalid signature, wrong `iss`/`aud`, expired, missing `azp` |
-| `403` | `forbidden` | Authenticated but the client is not allowed (other provider, provider on a wallet route, internal on `POST /wagering/transactions`, body `providerId` mismatch) |
+| `403` | `forbidden` | Authenticated but the client is not allowed (other provider on a provider path, provider on a wallet route, internal on `POST /wagering/transactions`, body `providerId` mismatch) |
 | `400` | `invalid` | `POST /wagering/transactions` with a body that is not JSON |
-| `501` | `not_implemented` | Gate passed; use case not implemented yet |
 | `503` | `unavailable` | JWKS / IdP fetch failed while verifying |
 
 401 example:

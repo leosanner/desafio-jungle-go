@@ -5,12 +5,11 @@
 
 ## Overview
 
-Phase 4 of a Go + Uber Fx wagering service: hexagonal layout, stdlib HTTP health checks,
-PostgreSQL via `pgx`, golang-migrate, LocalStack SQS queues, a **pure domain model** (`Money`,
-`Wallet`, `WagerTransaction`, ledger, operations, events), **financial persistence** (schema,
-repositories, unit of work, per-wallet locking), and **OIDC authentication** against Keycloak
-(`client_credentials`, JWKS). There is still no wagering use-case HTTP implementation
-(protected routes return `501` after authorization) and no background workers.
+Phase 5 of a Go + Uber Fx wagering service: hexagonal layout, stdlib HTTP, PostgreSQL via `pgx`,
+golang-migrate, LocalStack SQS queues, a **pure domain model**, **financial persistence**, **OIDC
+authentication**, and **HTTP use cases** (wallet opening, wagering operations with persistent
+idempotency, ledger reads, reconciliation). Outbox **rows** are written in the same commit; there is
+still no publisher worker, SQS consumer, or pending-reference worker.
 
 - Module: `github.com/leosanner/desafio-jungle-go` ([ADR 0001](docs/adr/0001-package-layout-and-layer-boundaries.md))
 - Go 1.25, `net/http` ServeMux, `log/slog` JSON ([ADR 0002](docs/adr/0002-go-version-and-http-router.md))
@@ -55,8 +54,8 @@ API. **sqlc** is not used in Phase 1 (optional later, not chosen).
 **Migrations (accepted):** golang-migrate v4, SQL files in `migrations/` with up and down.
 Baseline `000001_bootstrap` creates schema `wagering`. `000002_financial_schema` adds `wallets`,
 `wager_transactions`, `wallet_ledger_entries` (BIGINT minor units, uniqueness/check constraints,
-append-only ledger trigger). The app runs migrate Up on start from `MIGRATIONS_PATH`. Rollback is a
-CLI operation, not automatic on shutdown.
+append-only ledger trigger). `000003_outbox` adds `outbox_events`. The app runs migrate Up on start
+from `MIGRATIONS_PATH`. Rollback is a CLI operation, not automatic on shutdown.
 
 [ADR 0003](docs/adr/0003-database-access-and-migrations.md).
 
@@ -66,8 +65,8 @@ CLI operation, not automatic on shutdown.
 **Unit of work (proposed):** [ADR 0009](docs/adr/0009-sql-unit-of-work.md). Application ports
 `UnitOfWork` and repositories; `Within(ctx, func(ctx, Repositories) error)` opens one `pgx.Tx`,
 injects tx-scoped repos, commits on `nil`, rolls back on error or panic. Repositories never begin
-their own transactions. Inbox/outbox are not in this phase; `Repositories` must accept them later
-on the same commit. Unique/check/lock errors map by `SQLSTATE` to classifiable errors
+their own transactions. `Repositories.Outbox` joins the same commit ([ADR 0014](docs/adr/0014-outbox-persistence.md)).
+Inbox remains later. Unique/check/lock errors map by `SQLSTATE` to classifiable errors
 (`errors.Is`), never by message string. Financial reads that decide a debit or credit run inside
 the same `Within`.
 
@@ -83,7 +82,13 @@ are rejected as the primary strategy.
 
 ## Idempotency
 
-Key scope, canonical hash (algorithm, fields, normalizations), replay and conflicts. — _TBD_
+**Proposed:** [ADR 0012](docs/adr/0012-idempotency-canonical-hash.md). Key scope is
+`(provider_id, idempotency_key)` for external rows. Hash is SHA-256 hex of key-sorted JSON of the
+business fields (money as canonical `"25.00"` + ISO currency). The idempotency key and transport
+metadata are excluded. Same key + hash → replay with the original `ResultBalance`. Same key +
+different hash → `IDEMPOTENCY_PAYLOAD_CONFLICT`. `(providerId, externalTransactionId)` under another
+key → `DUPLICATE_EXTERNAL_TRANSACTION`. The server never replaces a received `Idempotency-Key`.
+Internal IDs are UUID v7 generated in `internal/app` (stdlib `crypto/rand`, no extra dependency).
 
 ## `WagerTransaction` state machine
 
@@ -118,7 +123,10 @@ See [`docs/events/README.md`](docs/events/README.md).
 ## Outbox and publishing
 
 Domain event types and `WalletBalanceChanged` payload: [`docs/events/outbox-events.md`](docs/events/outbox-events.md).
-Concurrent claim, backoff, recovery, destination and routing. — _TBD_
+
+**Proposed:** [ADR 0014](docs/adr/0014-outbox-persistence.md). `wagering.outbox_events` is written in
+the same `Within` as wallet, transaction and ledger. Rows stay unpublished (`published_at` NULL).
+Concurrent claim, backoff, recovery, destination and routing. — _TBD_ (Phase 6)
 
 ## Authentication and authorization
 
@@ -155,28 +163,33 @@ financial payloads.
 **Health:** public `GET /health/live` and `GET /health/ready` (PostgreSQL + SQS; ready fails during
 shutdown). [`docs/api/health.md`](docs/api/health.md).
 
-Correlation IDs on every business log line, metrics and tracing — _TBD_
+HTTP statuses: [ADR 0013](docs/adr/0013-http-status-mapping.md), [`docs/api/status.md`](docs/api/status.md).
+
+Reconciliation divergences are logged (`walletId`, entry count, no full payload) and counted via
+`app.Metrics`. Broader metrics and tracing — _TBD_
 
 ## Limitations, interpretations and unfinished work
 
-Phase 4 adds OIDC (`internal/adapter/auth`, Keycloak realm import, protected HTTP stubs). Still
-unfinished:
+Phase 5 adds HTTP use cases (`internal/app`, protected handlers). Still unfinished:
 
-- No wagering HTTP use cases (routes exist and require auth; handlers return `501`) and no workers.
-- ADRs 0006–0011 are **Proposed** until confirmed.
+- No SQS consumer, outbox publisher, or pending-reference worker. `PENDING_REFERENCE` is persisted
+  and returned as `202` until Phase 8 resumes it.
+- ADRs 0006–0014 are **Proposed** until confirmed.
 - STK-05 is documented and implemented: `pgx/v5` ([ADR 0003](docs/adr/0003-database-access-and-migrations.md)),
   `BIGINT` minor units ([ADR 0006](docs/adr/0006-money-representation.md), migration `000002`),
-  unit of work ([ADR 0009](docs/adr/0009-sql-unit-of-work.md)).
-- Inbox/outbox persistence remains later (same `Repositories` / `Within` pattern).
-- TST-04 is covered by `-tags=integration` tests in `internal/adapter/postgres`
-  (`TestMigrationsUpAndDown`, `TestFinancialSchemaConstraints`, `TestLedgerAppendOnly`,
-  `TestUnitOfWorkAtomicity`, `TestConcurrentBetsSerializePerWallet`). They need `POSTGRES_DSN`
-  only. TST-07 needs Keycloak and `OIDC_ISSUER` (`TestOIDCVerifierRealIdP`, `TestAuthRealIdP`).
+  unit of work ([ADR 0009](docs/adr/0009-sql-unit-of-work.md)), outbox insert ([ADR 0014](docs/adr/0014-outbox-persistence.md),
+  migration `000003`).
+- Inbox persistence remains later (same `Repositories` / `Within` pattern).
+- TST-04 is covered by `-tags=integration` tests in `internal/adapter/postgres`.
+  HTTP use cases: `TestHTTPPhase5UseCases`, `TestHTTPConcurrentSameBet`, `TestHTTPTwoBetsOnHundred`,
+  `TestHTTPDistinctWalletsParallel` (`POSTGRES_DSN`). TST-07 needs Keycloak and `OIDC_ISSUER`.
   Multi-instance runs and failure injection remain later
   ([ADR 0005](docs/adr/0005-test-strategy-initial.md)).
-- Health endpoints stay public. `GET /wagering/transactions/{transactionId}` ownership is Phase 5.
+- Health endpoints stay public.
 
 Interpretations: migrate Up on process start; rollback is operator-driven via CLI; default
 `go test ./...` never requires Docker; `"25"` / `"25.0"` are rejected as money input (no
 normalization); a BET is refunded at most once in its lifetime even if that refund is later
-rolled back; HTTP `providerId` is always the token `azp`, never the untrusted body/path alone.
+rolled back; HTTP `providerId` is always the token `azp`, never the untrusted body/path alone;
+`GET /wagering/transactions/{id}` for another provider is `404` (no existence leak); provider-path
+mismatch stays `403`.

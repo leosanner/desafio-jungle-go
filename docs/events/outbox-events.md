@@ -1,9 +1,10 @@
 # Outbox event types (domain)
 
 Concrete event types from `internal/domain` (`init.md` §11). Envelope fields `eventId`,
-`correlationId` and `causationId` are assigned when the outbox row is written (later phase).
-Constructors set `eventType` and `version` (currently `1`). Timestamps are UTC. Money in JSON is
-the string contract from [ADR 0006](../adr/0006-money-representation.md).
+`correlationId` and `causationId` are assigned when the outbox row is written
+([ADR 0014](../adr/0014-outbox-persistence.md)). Constructors set `eventType` and `version`
+(currently `1`). Timestamps are UTC. Money in JSON is the string contract from
+[ADR 0006](../adr/0006-money-representation.md).
 
 | `eventType` | Trigger | Aggregate |
 | --- | --- | --- |
@@ -15,5 +16,6 @@ the string contract from [ADR 0006](../adr/0006-money-representation.md).
 `WalletBalanceChanged.data` includes `walletId`, `transactionId`, `direction`, `money`,
 `balanceBefore`, `balanceAfter`, `walletVersion`.
 
-Zero-balance wallet opening and `LOSS` do **not** emit `WalletBalanceChanged`. Destination, routing
-and at-least-once consumption remain TBD (outbox phase).
+Zero-balance wallet opening and `LOSS` do **not** emit `WalletBalanceChanged`. Rows are inserted
+unpublished (`published_at` NULL) in the same SQL commit as the domain write. Destination, routing,
+concurrent claim and at-least-once consumption remain TBD (publisher in Phase 6).

@@ -14,13 +14,15 @@ content grows; this README keeps the index and shared conventions.
 - `Idempotency-Key` rules, canonical hash algorithm and normalizations.
 - Ledger pagination (opaque cursor, ordering, limits).
 
-Phase 4 documents authentication for the registered business paths. Financial handlers
-remain stubs (`501`) until the HTTP phase. Health probes stay public.
+Phase 5 implements the financial handlers. Health probes stay public.
 
 ## Index
 
 | Document | Endpoints |
 | --- | --- |
 | [health.md](health.md) | `GET /health/live`, `GET /health/ready` (public, unauthenticated) |
-| [auth.md](auth.md) | Bearer JWT, `providerId` from `azp`, 401/403/501, local clients |
-| [failure-codes.md](failure-codes.md) | Domain `failureCode` catalog (HTTP mapping later) |
+| [auth.md](auth.md) | Bearer JWT, `providerId` from `azp`, 401/403, local clients |
+| [status.md](status.md) | HTTP status catalog and error body |
+| [wallets.md](wallets.md) | `POST/GET /wallets`, ledger, reconciliation (internal) |
+| [wagering.md](wagering.md) | `POST/GET` wagering transactions, idempotency |
+| [failure-codes.md](failure-codes.md) | Domain `failureCode` catalog and HTTP mapping |

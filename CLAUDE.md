@@ -77,15 +77,16 @@ migrate -path migrations -database "$POSTGRES_DSN" down 1
   Business routes need `Authorization: Bearer` ([docs/api/auth.md](docs/api/auth.md)).
 - Default `go test ./...` is unit tests only (no containers). `-tags=integration` is for real
   PostgreSQL / Keycloak / LocalStack when those tests exist ([ADR 0005](docs/adr/0005-test-strategy-initial.md)).
-  TST-04 postgres tests need `POSTGRES_DSN` only (Keycloak/SQS not required). TST-07 needs
-  `OIDC_ISSUER` and a running Keycloak with the imported `wagering` realm.
+  TST-04 postgres tests need `POSTGRES_DSN` only (Keycloak/SQS not required). HTTP Phase 5
+  integration tests (`TestHTTPPhase5UseCases` and concurrency tests) also need `POSTGRES_DSN` only.
+  TST-07 needs `OIDC_ISSUER` and a running Keycloak with the imported `wagering` realm.
 
 ## Current state
 
-Phase 4 authentication is in place: Keycloak realm import, OIDC JWT verification (JWKS),
-`providerId` from `azp`, wallet routes restricted to `wagering-internal`, provider isolation on
-`/providers/{providerId}/...`. Business handlers are **stubs (`501`)** until Phase 5. Domain from
-Phase 2 and persistence from Phase 3 remain. **No wagering use cases**, no workers.
+Phase 5 HTTP use cases are in place: wallet opening, wagering operations with persistent
+idempotency (canonical SHA-256 hash), ledger reads, reconciliation, and unpublished outbox rows in
+the same commit. Domain from Phase 2, persistence from Phase 3, OIDC from Phase 4 remain.
+**No SQS consumer, outbox publisher, or pending-reference worker.**
 Decisions: [ADR 0001](docs/adr/0001-package-layout-and-layer-boundaries.md)–[0005](docs/adr/0005-test-strategy-initial.md)
-(accepted); [ADR 0006](docs/adr/0006-money-representation.md)–[0011](docs/adr/0011-oidc-keycloak-auth.md)
-(proposed). Next: Phase 5 HTTP use cases.
+(accepted); [ADR 0006](docs/adr/0006-money-representation.md)–[0014](docs/adr/0014-outbox-persistence.md)
+(proposed). Next: Phase 6 outbox publisher.

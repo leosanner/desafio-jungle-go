@@ -1,7 +1,8 @@
-# Integration tests (TST-04, TST-07)
+# Integration tests (TST-04, TST-07, HTTP use cases)
 
-Postgres constraint and atomicity tests use build tag `integration` and a real PostgreSQL.
-Keycloak and SQS are **not** required for TST-04.
+Postgres constraint, atomicity and HTTP use-case tests use build tag `integration` and a real PostgreSQL.
+Keycloak and SQS are **not** required for TST-04 or the Phase 5 HTTP tests (`TestHTTPPhase5UseCases`,
+`TestHTTPConcurrentSameBet`, `TestHTTPTwoBetsOnHundred`, `TestHTTPDistinctWalletsParallel`).
 
 OIDC tests (TST-07) use the same tag and a real Keycloak with realm `wagering` imported.
 
@@ -13,12 +14,12 @@ OIDC tests (TST-07) use the same tag and a real Keycloak with realm `wagering` i
 
 ## Run
 
-Postgres only (TST-04):
+Postgres only (TST-04 and HTTP Phase 5):
 
 ```sh
 docker compose up -d postgres
 set -a && source .env.example && set +a
-go test -tags=integration ./internal/adapter/postgres/...
+go test -tags=integration ./internal/adapter/postgres/... ./internal/adapter/http/... ./internal/app/...
 ```
 
 Keycloak (TST-07):
