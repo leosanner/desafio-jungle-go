@@ -1,0 +1,197 @@
+{
+  "id": "wagering",
+  "realm": "wagering",
+  "displayName": "Wagering",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": false,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": false,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": false,
+  "accessTokenLifespan": 300,
+  "accessTokenLifespanForImplicitFlow": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "offlineSessionIdleTimeout": 2592000,
+  "accessCodeLifespan": 60,
+  "accessCodeLifespanUserAction": 300,
+  "accessCodeLifespanLogin": 1800,
+  "roles": {
+    "realm": [
+      {
+        "name": "internal",
+        "description": "Internal wallet service. Not a game provider.",
+        "composite": false,
+        "clientRole": false
+      },
+      {
+        "name": "provider",
+        "description": "Game provider. providerId is the OAuth client id (azp).",
+        "composite": false,
+        "clientRole": false
+      }
+    ]
+  },
+  "defaultRole": {
+    "name": "default-roles-wagering",
+    "description": "${role_default-roles}",
+    "composite": true,
+    "clientRole": false
+  },
+  "clients": [
+    {
+      "clientId": "wagering-api",
+      "name": "Wagering HTTP API",
+      "description": "Resource-server audience. No grants; tokens must include aud=wagering-api.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "bearerOnly": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "authorizationServicesEnabled": false,
+      "fullScopeAllowed": false,
+      "frontchannelLogout": false,
+      "redirectUris": [],
+      "webOrigins": []
+    },
+    {
+      "clientId": "wagering-internal",
+      "name": "Internal wallet service",
+      "description": "Confidential client for wallet open/read/ledger/reconciliation. Not a providerId.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "bearerOnly": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "internal-secret",
+      "fullScopeAllowed": true,
+      "frontchannelLogout": false,
+      "redirectUris": [],
+      "webOrigins": [],
+      "defaultClientScopes": ["web-origins", "acr", "roles", "profile"],
+      "optionalClientScopes": [],
+      "protocolMappers": [
+        {
+          "name": "audience-wagering-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "wagering-api",
+            "included.custom.audience": "wagering-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "provider-a",
+      "name": "Game provider A",
+      "description": "Confidential client. clientId is the authorized providerId.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "bearerOnly": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "provider-a-secret",
+      "fullScopeAllowed": true,
+      "frontchannelLogout": false,
+      "redirectUris": [],
+      "webOrigins": [],
+      "defaultClientScopes": ["web-origins", "acr", "roles", "profile"],
+      "optionalClientScopes": [],
+      "protocolMappers": [
+        {
+          "name": "audience-wagering-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "wagering-api",
+            "included.custom.audience": "wagering-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "provider-b",
+      "name": "Game provider B",
+      "description": "Confidential client. clientId is the authorized providerId.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "bearerOnly": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "provider-b-secret",
+      "fullScopeAllowed": true,
+      "frontchannelLogout": false,
+      "redirectUris": [],
+      "webOrigins": [],
+      "defaultClientScopes": ["web-origins", "acr", "roles", "profile"],
+      "optionalClientScopes": [],
+      "protocolMappers": [
+        {
+          "name": "audience-wagering-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "wagering-api",
+            "included.custom.audience": "wagering-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "service-account-wagering-internal",
+      "enabled": true,
+      "emailVerified": true,
+      "serviceAccountClientId": "wagering-internal",
+      "realmRoles": ["internal", "default-roles-wagering"]
+    },
+    {
+      "username": "service-account-provider-a",
+      "enabled": true,
+      "emailVerified": true,
+      "serviceAccountClientId": "provider-a",
+      "realmRoles": ["provider", "default-roles-wagering"]
+    },
+    {
+      "username": "service-account-provider-b",
+      "enabled": true,
+      "emailVerified": true,
+      "serviceAccountClientId": "provider-b",
+      "realmRoles": ["provider", "default-roles-wagering"]
+    }
+  ]
+}
