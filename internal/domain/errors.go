@@ -135,6 +135,11 @@ func validation(code FailureCode, err error) error {
 	return classified(code, FailureClassValidation, err)
 }
 
+// NewValidation wraps err as a classifiable validation failure for use cases.
+func NewValidation(code FailureCode, err error) error {
+	return validation(code, err)
+}
+
 func rejection(code FailureCode, err error) error {
 	return classified(code, FailureClassRejection, err)
 }
