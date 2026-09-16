@@ -26,6 +26,7 @@ func Modules() fx.Option {
 		wageringModule(),
 		outboxModule(),
 		inboundModule(),
+		pendingModule(),
 		httpModule(),
 	)
 }
