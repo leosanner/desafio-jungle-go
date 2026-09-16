@@ -25,6 +25,8 @@ Accepted ADRs are not rewritten: a change of direction creates a new ADR that su
 | [0014](0014-outbox-persistence.md) | Outbox persistence without a publisher | Proposed |
 | [0015](0015-outbox-destination-and-routing.md) | Outbox destination and routing (SQS FIFO) | Proposed |
 | [0016](0016-outbox-claim-and-backoff.md) | Outbox claim, lease, backoff and recovery | Proposed |
+| [0017](0017-inbox-persistence.md) | Inbox persistence in the financial unit of work | Proposed |
+| [0018](0018-sqs-inbound-consume.md) | SQS inbound consume, retry, DLQ and shutdown | Proposed |
 
 ## Pending decisions
 
@@ -41,7 +43,7 @@ Decisions the challenge requires documenting that don't have an ADR yet:
 - [ ] Pending references: backoff, max attempts/TTL (wait vs unsuccessful reference is in ADR 0007)
 - [x] `REFUND` and `ROLLBACK` combinations on the same bet — [ADR 0008](0008-refund-rollback-combinations.md) (Proposed)
 - [x] `failureCode` HTTP mapping — [ADR 0013](0013-http-status-mapping.md) (Proposed); [`docs/api/status.md`](../api/status.md)
-- [ ] SQS inbox: visibility timeout, attempts, DLQ, invalid messages, `MessageGroupId`/`MessageDeduplicationId`
+- [x] SQS inbox: visibility timeout, attempts, DLQ, invalid messages, `MessageGroupId`/`MessageDeduplicationId` — [ADR 0017](0017-inbox-persistence.md) (inbox), [ADR 0018](0018-sqs-inbound-consume.md) (consume) (Proposed)
 - [x] Outbox: concurrent claim, lease, backoff, event destination and routing — [ADR 0014](0014-outbox-persistence.md) (insert), [ADR 0015](0015-outbox-destination-and-routing.md) (destination), [ADR 0016](0016-outbox-claim-and-backoff.md) (claimer) (Proposed)
 - [x] IdP, token validation and permission model (providers × internal service) — [ADR 0011](0011-oidc-keycloak-auth.md) (Proposed)
 - [ ] Logs, metrics and (optional) tracing — JSON `log/slog` chosen in [ADR 0002](0002-go-version-and-http-router.md); correlation fields, metrics and tracing still open
