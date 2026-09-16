@@ -28,6 +28,7 @@ Accepted ADRs are not rewritten: a change of direction creates a new ADR that su
 | [0017](0017-inbox-persistence.md) | Inbox persistence in the financial unit of work | Proposed |
 | [0018](0018-sqs-inbound-consume.md) | SQS inbound consume, retry, DLQ and shutdown | Proposed |
 | [0019](0019-pending-reference-resume.md) | Pending-reference worker, backoff, TTL and PENDING resume | Proposed |
+| [0020](0020-multi-instance-and-failure-injection.md) | Multi-instance verification and failure injection | Proposed |
 
 ## Pending decisions
 
