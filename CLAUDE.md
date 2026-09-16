@@ -81,14 +81,15 @@ migrate -path migrations -database "$POSTGRES_DSN" down 1
   integration tests (`TestHTTPPhase5UseCases` and concurrency tests) also need `POSTGRES_DSN` only.
   Phase 6 outbox publish tests (`TestOutboxRelay*`, `TestOutboxTwoPublishersContend`,
   `TestOutboxRecoverPublishBeforeAck`) need `POSTGRES_DSN` and LocalStack (`AWS_ENDPOINT_URL`).
-  Claim/SKIP LOCKED tests need `POSTGRES_DSN` only. TST-07 needs `OIDC_ISSUER` and a running
+  Claim/SKIP LOCKED tests need `POSTGRES_DSN` only. Phase 7 inbound consume tests (`TestInbound*`)
+  need `POSTGRES_DSN` and LocalStack (`AWS_ENDPOINT_URL`). TST-07 needs `OIDC_ISSUER` and a running
   Keycloak with the imported `wagering` realm.
 
 ## Current state
 
-Phase 6 outbox publisher is in place: SKIP LOCKED claim, lease via `next_attempt_at`, publish to
-SQS FIFO `wager-events.fifo`, backoff, and recovery of send-without-ack. HTTP use cases, domain,
-persistence and OIDC remain. **No SQS inbound consumer or pending-reference worker.**
+Phase 7 inbound SQS consumer is in place: transactional inbox, long-poll worker, visibility backoff,
+explicit DLQ for permanent errors, and recovery of commit-without-delete. HTTP use cases, domain,
+persistence, OIDC and the outbox publisher remain. **No pending-reference worker.**
 Decisions: [ADR 0001](docs/adr/0001-package-layout-and-layer-boundaries.md)–[0005](docs/adr/0005-test-strategy-initial.md)
-(accepted); [ADR 0006](docs/adr/0006-money-representation.md)–[0016](docs/adr/0016-outbox-claim-and-backoff.md)
-(proposed). Next: Phase 7 SQS consumer with inbox.
+(accepted); [ADR 0006](docs/adr/0006-money-representation.md)–[0018](docs/adr/0018-sqs-inbound-consume.md)
+(proposed). Next: Phase 8 pending references.

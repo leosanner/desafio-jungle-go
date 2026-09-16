@@ -18,7 +18,7 @@ the `spec-audit` skill or when completing a deliverable.
 | ELIM-07 | Works correctly with multiple instances | — | |
 | ELIM-08 | No publishing before commit | ✅ | Outbox insert in the same `Within` ([ADR 0014](../adr/0014-outbox-persistence.md)); publisher claims only committed rows (`TestOutboxRelayPublishesOpeningEvents`, [ADR 0016](../adr/0016-outbox-claim-and-backoff.md)) |
 | ELIM-09 | Auditable ledger | ✅ | `migrations/000002_financial_schema.up.sql`; `TestLedgerAppendOnly`; HTTP `GET .../ledger` (`TestHTTPPhase5UseCases`) |
-| ELIM-10 | Real PostgreSQL, SQS and IdP in tests (no full mocking) | 🚧 | TST-04 uses real PostgreSQL (`-tags=integration`, skip-if-no-`POSTGRES_DSN`). TST-07 uses real Keycloak (`OIDC_ISSUER`). Phase 6 outbox publish tests use real LocalStack SQS. Inbound consumer still missing |
+| ELIM-10 | Real PostgreSQL, SQS and IdP in tests (no full mocking) | 🚧 | TST-04 uses real PostgreSQL (`-tags=integration`, skip-if-no-`POSTGRES_DSN`). TST-07 uses real Keycloak (`OIDC_ISSUER`). Phase 6 outbox publish tests use real LocalStack SQS. Phase 7 inbound consume tests use real LocalStack SQS. Multi-instance still Phase 9 |
 
 ## Stack and composition (§4)
 
@@ -27,13 +27,13 @@ the `spec-audit` skill or when completing a deliverable.
 | STK-01 | Go version declared in `go.mod` and Dockerfile | ✅ | `go.mod` (`go 1.25.11`); `Dockerfile` (`golang:1.25-bookworm`); [ADR 0002](../adr/0002-go-version-and-http-router.md) | |
 | STK-02 | `go.mod` and `go.sum` versioned | ✅ | `go.mod`, `go.sum` (`github.com/leosanner/desafio-jungle-go`) | |
 | STK-03 | Docker Compose with PostgreSQL, IdP and LocalStack/MiniStack | ✅ | `docker-compose.yml` (postgres 16, Keycloak 26 + realm import, LocalStack 4.6); [test-dependencies.md](../runbooks/test-dependencies.md) | Realm `wagering` imported from `docker/keycloak/realm-wagering.json` |
-| STK-04 | Versioned migrations with documented apply and rollback | ✅ | `migrations/000001_bootstrap.up.sql` / `.down.sql`; `migrations/000002_financial_schema.up.sql` / `.down.sql`; `migrations/000003_outbox.up.sql` / `.down.sql`; [README](../../README.md) Migrations; [ADR 0003](../adr/0003-database-access-and-migrations.md) | App Up on start from `MIGRATIONS_PATH`; CLI `down 1` |
+| STK-04 | Versioned migrations with documented apply and rollback | ✅ | `migrations/000001_bootstrap.up.sql` / `.down.sql`; `migrations/000002_financial_schema.up.sql` / `.down.sql`; `migrations/000003_outbox.up.sql` / `.down.sql`; `migrations/000004_inbox.up.sql` / `.down.sql`; [README](../../README.md) Migrations; [ADR 0003](../adr/0003-database-access-and-migrations.md) | App Up on start from `MIGRATIONS_PATH`; CLI `down 1` |
 | STK-05 | DB library, `Money` mapping and cross-repository transaction documented | ✅ | [ADR 0003](../adr/0003-database-access-and-migrations.md) (`pgx/v5`); [ADR 0006](../adr/0006-money-representation.md) (`int64` cents → `BIGINT`, Proposed); [ADR 0009](../adr/0009-sql-unit-of-work.md) (Proposed); `internal/app/ports.go` (`UnitOfWork`); `internal/adapter/postgres/uow.go`; `migrations/000002_financial_schema.up.sql`; `TestMapError`; `TestUnitOfWorkAtomicity` | ADRs 0006/0009 still Proposed |
 | FX-01 | Composition via `fx.Module`, `fx.Provide`, `fx.Invoke` with constructors | ✅ | `internal/composition/`; `cmd/wagering/main.go`; `TestValidateApp`; [ADR 0004](../adr/0004-fx-lifecycle-and-shutdown.md) | |
 | FX-02 | Config and dependency validation on start | ✅ | `internal/config/`; `TestInvalidConfigFailsStart`; [ADR 0004](../adr/0004-fx-lifecycle-and-shutdown.md) | |
-| FX-03 | Workers with cancellation, deadlines and observable termination | ✅ | `OutboxWorker` (`internal/composition/outbox.go`); `TestOutboxWorkerStartStopClosesDone`; `TestAppStartStop` | |
-| FX-04 | Shutdown: stops input, finishes/releases in-flight work | 🚧 | HTTP `Shutdown`; outbox worker cancel + wait on `done` (lease-bounded in-flight). SQS consumer N/A | |
-| FX-05 | Dependencies close after the components using them | 🚧 | Outbox module registered before HTTP and after postgres so `OnStop` is HTTP → worker → pool | |
+| FX-03 | Workers with cancellation, deadlines and observable termination | ✅ | `OutboxWorker` (`internal/composition/outbox.go`); `InboundWorker` (`internal/composition/inbound.go`); `TestOutboxWorkerStartStopClosesDone`; `TestConsumerRunStopsOnCancel`; `TestAppStartStop` | |
+| FX-04 | Shutdown: stops input, finishes/releases in-flight work | ✅ | HTTP `Shutdown`; outbox worker cancel + wait on `done`; inbound worker cancel + wait, `ReleaseInFlight` on deadline ([ADR 0018](../adr/0018-sqs-inbound-consume.md)) |
+| FX-05 | Dependencies close after the components using them | ✅ | Outbox then inbound then HTTP registered after postgres so `OnStop` is HTTP → inbound → outbox → pool |
 | FX-06 | Domain independent of Fx, HTTP, SQS and persistence | ✅ | `internal/domain/deps_test.go`; [ADR 0001](../adr/0001-package-layout-and-layer-boundaries.md) | |
 
 ## Authentication and authorization (§2)
@@ -45,7 +45,7 @@ the `spec-audit` skill or when completing a deliverable.
 | AUTH-03 | Authorized `providerId` derived from the identity | ✅ | JWT `azp` → `app.Actor.ProviderID` (`internal/adapter/auth/verifier.go`); [ADR 0011](../adr/0011-oidc-keycloak-auth.md); `TestVerifyAcceptsProviderToken` | Body/path never trusted alone |
 | AUTH-04 | Provider accesses only its own transactions, including replays | ✅ | Path isolation `TestProviderIsolationOnPath`, `TestAuthRealIdP`; POST body `providerId` must match `azp`; `TestGetTransactionHidesOtherProvider`; `TestHTTPPhase5UseCases` | |
 | AUTH-05 | Wallet operations restricted to the internal service | ✅ | `requireInternal` on wallet routes; `OIDC_INTERNAL_CLIENT`; `TestWalletRestrictedToInternal`; `TestAuthRealIdP/provider_cannot_open_wallet` | |
-| AUTH-06 | Broker access controlled by credentials/policies | 🚧 | LocalStack/AWS static keys required (`AWS_ACCESS_KEY_ID` / `SECRET`); [ADR 0011](../adr/0011-oidc-keycloak-auth.md). No consumer yet | |
+| AUTH-06 | Broker access controlled by credentials/policies | ✅ | LocalStack/AWS static keys required; inbound consumer uses queue-gated `data.providerId` ([ADR 0018](../adr/0018-sqs-inbound-consume.md)); [inbound.md](../events/inbound.md) |
 | AUTH-07 | IdP, validation and permission rationale in `ARCHITECTURE.md` | ✅ | [ARCHITECTURE.md](../../ARCHITECTURE.md) Authentication; [ADR 0011](../adr/0011-oidc-keycloak-auth.md); [auth.md](../api/auth.md) | ADR Proposed |
 
 ## Guarantees (§5)
@@ -87,13 +87,13 @@ the `spec-audit` skill or when completing a deliverable.
 | WTX-02 | Validated state machine; immutable terminal states; documented | ✅ | [ADR 0007](../adr/0007-wager-transaction-state-machine.md); `TestStateMachineTransitions`; `TestRejectedIsTerminal` | | |
 | WTX-03 | Replay returns persisted result without re-applying | ✅ | Rehydration does not re-apply; `ResultBalance` snapshot; `TestSubmitReplayAndConflicts`; `TestHTTPPhase5UseCases` | |
 | WTX-04 | `PENDING` durably resumable by another instance | — | | |
-| WTX-05 | `OPENING` rejected via HTTP/SQS; schema distinguishes internal/external; no duplicate opening credit | 🚧 | Domain: `NewExternalTransaction` / `Apply` reject `OPENING`; `TestNewExternalTransactionRejectsOpening`. Schema: `000002` origin CHECKs. HTTP: `ParseKind` + constructor. SQS later | |
+| WTX-05 | `OPENING` rejected via HTTP/SQS; schema distinguishes internal/external; no duplicate opening credit | ✅ | Domain: `NewExternalTransaction` / `Apply` reject `OPENING`; `TestNewExternalTransactionRejectsOpening`. Schema: `000002` origin CHECKs. HTTP: `ParseKind` + constructor. SQS: `ParseInbound` (`TestParseInboundRejectsInvalid`) |
 | WTX-06 | Transient vs permanent failure distinction documented | ✅ | [ADR 0007](../adr/0007-wager-transaction-state-machine.md); `FailureClass` | | |
 | LED-01 | Entry fields and `balanceAfter = balanceBefore ± money` validation | ✅ | `NewLedgerEntry`; `TestLedgerValidatesInvariant` | | |
 | LED-02 | `(walletId, transactionId)` uniqueness and update/delete protection in the database | ✅ | `000002` `UNIQUE (wallet_id, transaction_id)`; trigger; `TestFinancialSchemaConstraints` (duplicate ledger); `TestLedgerAppendOnly` | |
 | LED-03 | `LOSS` and rejections produce no entry | ✅ | `TestApplyBetWinLoss`; `TestApplyBetInsufficientFunds` | | |
-| INB-01 | Inbox with `(consumerName, messageId)` uniqueness, hash, received and completed timestamps | — | | |
-| INB-02 | Inbox in the same transaction as domain, ledger and events | — | | |
+| INB-01 | Inbox with `(consumerName, messageId)` uniqueness, hash, received and completed timestamps | ✅ | `migrations/000004_inbox.up.sql`; [ADR 0017](../adr/0017-inbox-persistence.md); `TestFinancialSchemaConstraints` (`duplicate inbox`); `TestHandleInboundWritesInboxWithDomain` | |
+| INB-02 | Inbox in the same transaction as domain, ledger and events | ✅ | `HandleInbound` / `inboundInTx`; UoW `Repositories.Inbox`; `TestHandleInboundWritesInboxWithDomain`; `TestHandleInboundInboxAtomicWithDomain`; `TestHandleInboundNoInboxOnMissingWallet` | |
 | OUT-01 | Outbox with stable identity, attempts, next attempt, published timestamp and backoff | ✅ | `000003` columns; claim increments `attempts` and leases `next_attempt_at`; `MarkPublished` / `ScheduleRetry`; `TestBackoff`; `TestOutboxMarkPublishedAndRetry` | |
 
 ## Operations and references (§7)
@@ -134,7 +134,7 @@ the `spec-audit` skill or when completing a deliverable.
 | HTTP-04 | `GET /wagering/transactions/:transactionId` | ✅ | `GetTransaction`; ownership 404; `TestHTTPPhase5UseCases` | |
 | HTTP-05 | `GET /providers/:providerId/wagering/transactions/:externalTransactionId` | ✅ | `GetByProviderExternalID`; `TestHTTPPhase5UseCases` | |
 | HTTP-06 | `POST /wagering/transactions` with mandatory `Idempotency-Key` | ✅ | `handlePostWagering`; missing key → 400; `TestHTTPPhase5UseCases` | |
-| HTTP-07 | Canonical hash (sorted-key JSON), equivalent across HTTP/SQS, documented | ✅ | `domain.HashCanonicalPayload`; [ADR 0012](../adr/0012-idempotency-canonical-hash.md); `TestHashCanonicalPayloadStableAndExcludesTransport` | SQS adapter Phase 7 must call the same function |
+| HTTP-07 | Canonical hash (sorted-key JSON), equivalent across HTTP/SQS, documented | ✅ | `domain.HashCanonicalPayload`; [ADR 0012](../adr/0012-idempotency-canonical-hash.md); `TestHashCanonicalPayloadStableAndExcludesTransport`; SQS `ParseInbound` → `HandleInbound` → `submitInTx` |
 | HTTP-08 | Replay with `idempotentReplay: true` and original balance; conflict on different payload | ✅ | `TestSubmitReplayAndConflicts`; `TestHTTPPhase5UseCases`; `TestIdempotencyPayloadConflict` | |
 | HTTP-09 | Same `(providerId, externalTransactionId)` cannot be re-applied under another key | ✅ | `CheckExternalIdentity`; unique index; `TestSubmitReplayAndConflicts`; `TestHTTPPhase5UseCases` | |
 | HTTP-10 | Documented statuses and bodies: invalid, conflict, rejection, pending, unavailable | ✅ | [status.md](../api/status.md); [ADR 0013](../adr/0013-http-status-mapping.md) | |
@@ -146,20 +146,20 @@ the `spec-audit` skill or when completing a deliverable.
 
 | ID | Requirement | Status | Evidence | Notes |
 | --- | --- | --- | --- | --- |
-| SQS-01 | Queues `wager-transactions.fifo` and `wager-transactions-dlq.fifo` with redrive | 🚧 | `docker/localstack/init-sqs.sh`; `docker-compose.yml`; [docs/events/README.md](../events/README.md) | Queues + redrive provisioned; no consumer in Phase 1 |
-| SQS-02 | Use case and idempotency shared with HTTP | 🚧 | `app.Submit` is transport-agnostic. SQS adapter Phase 7 | |
-| SQS-03 | Envelope `messageId` as identity; hash checked on redelivery | — | | |
-| SQS-04 | Deleted only after commit; committed rejection deletes | — | | |
-| SQS-05 | Transient → retry with backoff; permanent/exhausted → DLQ | — | | |
-| SQS-06 | Attempt limits, visibility timeout and invalid message handling documented | — | | |
-| SQS-07 | SIGTERM: stop fetching, finish or release visibility | — | | |
-| SQS-08 | `MessageGroupId`/`MessageDeduplicationId` documented; HTTP×SQS concurrency validated | — | | |
+| SQS-01 | Queues `wager-transactions.fifo` and `wager-transactions-dlq.fifo` with redrive | ✅ | `docker/localstack/init-sqs.sh`; `docker-compose.yml`; [inbound.md](../events/inbound.md); consumer in `internal/adapter/sqs/consumer.go` |
+| SQS-02 | Use case and idempotency shared with HTTP | ✅ | `HandleInbound` → `submitInTx`; `TestHandleInboundHTTPThenSQSSameKey`; `TestInboundHTTPxSQSSameKeyOneDebit` |
+| SQS-03 | Envelope `messageId` as identity; hash checked on redelivery | ✅ | `ParseInbound`; `HashMessageBody`; `TestHandleInboundHashMismatch`; [ADR 0017](../adr/0017-inbox-persistence.md) | |
+| SQS-04 | Deleted only after commit; committed rejection deletes | ✅ | `Consumer.Handle` deletes after `HandleInbound` nil; REJECTED is a successful persist; `TestInboundConsumerProcessesBet`; [ADR 0018](../adr/0018-sqs-inbound-consume.md) | |
+| SQS-05 | Transient → retry with backoff; permanent/exhausted → DLQ | ✅ | `DispositionOf`; `ChangeVisibility` + `Backoff`; `SendToDLQ`; `TestDispositionOf`; `TestInboundInvalidMessageGoesToDLQ`; redrive `maxReceiveCount=5` | |
+| SQS-06 | Attempt limits, visibility timeout and invalid message handling documented | ✅ | [inbound.md](../events/inbound.md); [ADR 0018](../adr/0018-sqs-inbound-consume.md); `SQS_VISIBILITY_TIMEOUT` / `SQS_WAIT_TIME` / `SQS_BACKOFF_MAX` | |
+| SQS-07 | SIGTERM: stop fetching, finish or release visibility | ✅ | `InboundWorker` OnStop cancel + `ReleaseInFlight`; `TestConsumerRunStopsOnCancel`; [ADR 0018](../adr/0018-sqs-inbound-consume.md) | |
+| SQS-08 | `MessageGroupId`/`MessageDeduplicationId` documented; HTTP×SQS concurrency validated | ✅ | [inbound.md](../events/inbound.md); `TestInboundHTTPxSQSSameKeyOneDebit`; `TestHandleInboundHTTPThenSQSSameKey` | |
 
 ## Outbox (§11)
 
 | ID | Requirement | Status | Evidence | Notes |
 | --- | --- | --- | --- | --- |
-| OBX-01 | State, balance, ledger, inbox and events committed atomically | 🚧 | Wallet, tx, ledger, outbox in one `Within` (`persistApply`, `OpenWallet`). Inbox Phase 7 | |
+| OBX-01 | State, balance, ledger, inbox and events committed atomically | ✅ | Wallet, tx, ledger, outbox, inbox in one `Within` (`persistApply`, `OpenWallet`, `HandleInbound`) | |
 | OBX-02 | Separate worker, multiple publishers, contention, backoff, abandoned work recovery | ✅ | `OutboxWorker`; `TestOutboxClaimSkipLocked`; `TestOutboxTwoPublishersContend`; [ADR 0016](../adr/0016-outbox-claim-and-backoff.md) | |
 | OBX-03 | Recovery between commit→publish and publish→ack; `eventId` preserved | ✅ | `TestOutboxRelayPublishesEnvelope` (unpublished row then send); `TestOutboxRecoverPublishBeforeAck` (`AfterPublish` hook skips ack) | |
 | OBX-04 | Destination provisioned; routing and consumption contracts documented | ✅ | `wager-events.fifo` in `docker/localstack/init-sqs.sh`; [outbox-events.md](../events/outbox-events.md); [ADR 0015](../adr/0015-outbox-destination-and-routing.md) | |
@@ -184,19 +184,19 @@ the `spec-audit` skill or when completing a deliverable.
 | TST-02 | Unit: wallet invariants and state transitions | ✅ | `wallet_test.go`; `transaction_test.go` | | |
 | TST-03 | Unit: rules for the 5 kinds, zero policy, internal opening, payload conflict | ✅ | `apply_test.go`; `TestOpenWallet*`; `TestIdempotencyPayloadConflict` | | |
 | TST-04 | Integration: migrations, constraints, immutability, atomicity | ✅ | `TestMigrationsUpAndDown`; `TestFinancialSchemaConstraints`; `TestLedgerAppendOnly`; `TestUnitOfWorkAtomicity`; `go test -tags=integration ./internal/adapter/postgres/...` with `POSTGRES_DSN`. [integration.md](../runbooks/integration.md) | Skip-if-no-env; Keycloak/SQS not required |
-| TST-05 | Integration: inbox, redelivery, concurrent outbox, retry, DLQ, recovery | 🚧 | Concurrent outbox + publish/ack recovery: `TestOutboxTwoPublishersContend`, `TestOutboxRecoverPublishBeforeAck`, `TestOutboxMarkPublishedAndRetry`. Inbox/DLQ/redelivery Phase 7 | |
+| TST-05 | Integration: inbox, redelivery, concurrent outbox, retry, DLQ, recovery | 🚧 | Concurrent outbox: `TestOutboxTwoPublishersContend`, `TestOutboxRecoverPublishBeforeAck`. Inbox/redelivery/DLQ: `TestHandleInboundInboxAtomicWithDomain`, `TestInboundRecoverCommitBeforeDelete`, `TestInboundInvalidMessageGoesToDLQ`. PENDING restart still Phase 8 |
 | TST-06 | Integration: Fx composition, start/stop and resource release | ✅ | `TestValidateApp`; `TestInvalidConfigFailsStart`; `TestAppStartStop` (`-tags=integration`); `TestOutboxWorkerStartStopClosesDone` | |
 | TST-07 | Auth: real IdP; missing/invalid/expired; isolation; internal restriction; no effects | ✅ | Unit: `internal/adapter/auth/verifier_test.go`, `internal/adapter/http/auth_test.go` (expired, HMAC, isolation, no handler on 401). Integration: `TestOIDCVerifierRealIdP`, `TestAuthRealIdP` (`-tags=integration`, `OIDC_ISSUER`). Expired covered in unit tests (real Keycloak tokens are not expired) | |
 | TST-08 | Same bet 50× in parallel → one debit | ✅ | `TestHTTPConcurrentSameBet` (`-tags=integration`, `POSTGRES_DSN`) | |
 | TST-09 | Two 80.00 bets on 100.00 | ✅ | `TestConcurrentBetsSerializePerWallet`; `TestHTTPTwoBetsOnHundred` | ≥3 instances Phase 9 |
 | TST-10 | Distinct wallets in parallel | ✅ | `TestHTTPDistinctWalletsParallel` | |
 | TST-11 | Scenarios with ≥3 instances | — | | |
-| TST-12 | Consumer interrupted after commit and before delete | — | | |
+| TST-12 | Consumer interrupted after commit and before delete | ✅ | `TestInboundRecoverCommitBeforeDelete` (`Consumer.SetAfterCommit`) | |
 | TST-13 | Two publishers contending for the outbox | ✅ | `TestOutboxTwoPublishersContend`; `TestOutboxClaimSkipLocked` | |
 | TST-14 | Reversal before its reference → resolution or expiry | — | | |
 | TST-15 | Restart preserves idempotency, pending work and consistency; `PENDING` resumed | — | | |
-| TST-16 | Balance vs ledger at the end; scenarios crossing HTTP and SQS | 🚧 | `TestReconcileWalletConsistent`; HTTP reconciliation in `TestHTTPPhase5UseCases`. HTTP×SQS Phase 7 | |
-| TST-17 | Duplicate tests exercise application-level deduplication | ✅ | `TestHTTPConcurrentSameBet`; `TestSubmitReplayAndConflicts` (DB unique + application replay, not SQS FIFO) | |
+| TST-16 | Balance vs ledger at the end; scenarios crossing HTTP and SQS | ✅ | `TestReconcileWalletConsistent`; HTTP reconciliation in `TestHTTPPhase5UseCases`; `TestInboundHTTPxSQSSameKeyOneDebit`; `TestHandleInboundHTTPThenSQSSameKey` | |
+| TST-17 | Duplicate tests exercise application-level deduplication | ✅ | `TestHTTPConcurrentSameBet`; `TestSubmitReplayAndConflicts`; `TestInboundDuplicateSQSCopiesOneDebit` (distinct FIFO dedup ids, same envelope `messageId`) | |
 | TST-18 | `go test -race` on applicable tests | ✅ | `go test -race ./...` including `internal/domain` | |
 
 ## Delivery (§15)
@@ -204,10 +204,10 @@ the `spec-audit` skill or when completing a deliverable.
 | ID | Requirement | Status | Evidence | Notes |
 | --- | --- | --- | --- | --- |
 | ENT-01 | Reproducible from a clean checkout | 🚧 | [README](../../README.md) | Phase 1 instructions written; Compose/image/binary owned by other agents |
-| ENT-02 | README: prerequisites, env, queues, migrations, running, examples, tests | 🚧 | [README.md](../../README.md) | Phase 5 HTTP examples; SQS consume still later |
+| ENT-02 | README: prerequisites, env, queues, migrations, running, examples, tests | 🚧 | [README.md](../../README.md) | Phase 7 consume documented; pending-reference later |
 | ENT-03 | `.env.example` without real secrets | ✅ | `.env.example` | Local dummy keys only |
 | ENT-04 | Automatic IdP provisioning and test identities | ✅ | `docker/keycloak/realm-wagering.json`; Compose `--import-realm`; [auth.md](../api/auth.md); [README](../../README.md) Authentication | Local dummy client secrets |
-| ENT-05 | ARCHITECTURE.md with decisions, limitations, interpretations and unfinished work | 🚧 | [ARCHITECTURE.md](../../ARCHITECTURE.md); [docs/adr/](../adr/) | Phase 6 publisher summarized; ADRs 0006–0016 Proposed |
+| ENT-05 | ARCHITECTURE.md with decisions, limitations, interpretations and unfinished work | 🚧 | [ARCHITECTURE.md](../../ARCHITECTURE.md); [docs/adr/](../adr/) | Phase 7 consumer summarized; ADRs 0006–0018 Proposed |
 | ENT-06 | `docker compose up --build`, `go test ./...`, `go test -race ./...`, `go vet ./...` | ✅ | [README](../../README.md); Compose stack healthy; unit/`vet`/`-race` pass | |
 | ENT-07 | Separate docs: test dependencies, integration, multiple instances, failures, build tags | 🚧 | [test-dependencies.md](../runbooks/test-dependencies.md); [integration.md](../runbooks/integration.md); [ADR 0005](../adr/0005-test-strategy-initial.md) | TST-04 and TST-07 runbooks; multi-instance / failure runbooks still placeholders |
 | ENT-08 | `gofmt`-formatted code and reproducible dependencies | 🚧 | [ADR 0005](../adr/0005-test-strategy-initial.md); `gofmt -l .` in README | Domain added in Phase 2 |

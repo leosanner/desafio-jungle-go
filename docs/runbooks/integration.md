@@ -1,4 +1,4 @@
-# Integration tests (TST-04, TST-07, HTTP use cases, Phase 6 outbox)
+# Integration tests (TST-04, TST-07, HTTP use cases, Phase 6 outbox, Phase 7 inbound)
 
 Postgres constraint, atomicity and HTTP use-case tests use build tag `integration` and a real PostgreSQL.
 Keycloak and SQS are **not** required for TST-04 or the Phase 5 HTTP tests (`TestHTTPPhase5UseCases`,
@@ -8,6 +8,12 @@ Phase 6 claim tests (`TestOutboxClaimSkipLocked`, `TestOutboxMarkPublishedAndRet
 `POSTGRES_DSN` only. Publish/recovery tests (`TestOutboxRelayPublishesOpeningEvents`,
 `TestOutboxRelayPublishesEnvelope`, `TestOutboxTwoPublishersContend`,
 `TestOutboxRecoverPublishBeforeAck`) also need LocalStack (`AWS_ENDPOINT_URL`, dummy AWS keys).
+
+Phase 7 inbound tests (`TestHandleInboundInboxAtomicWithDomain`, `TestInboundConsumerProcessesBet`,
+`TestInboundRecoverCommitBeforeDelete`, `TestInboundInvalidMessageGoesToDLQ`,
+`TestInboundHTTPxSQSSameKeyOneDebit`, `TestInboundDuplicateSQSCopiesOneDebit`) need `POSTGRES_DSN`
+and LocalStack. The commit-before-delete test installs `Consumer.SetAfterCommit` so `DeleteMessage`
+is skipped ([ADR 0018](../adr/0018-sqs-inbound-consume.md)). That hook is tests-only.
 
 The publish-before-ack recovery test installs `OutboxRelay.SetAfterPublish` so `MarkPublished` is
 skipped after a successful `SendMessage` ([ADR 0016](../adr/0016-outbox-claim-and-backoff.md)). That
@@ -19,7 +25,7 @@ OIDC tests (TST-07) use the same tag and a real Keycloak with realm `wagering` i
 
 - Docker and Docker Compose
 - `POSTGRES_DSN` for TST-04 (host value in [`.env.example`](../../.env.example))
-- `AWS_ENDPOINT_URL` (and a healthy LocalStack) for Phase 6 publish tests
+- `AWS_ENDPOINT_URL` (and a healthy LocalStack) for Phase 6 publish tests and Phase 7 inbound tests
 - `OIDC_ISSUER` (and a healthy Keycloak) for TST-07
 
 ## Run
@@ -32,12 +38,12 @@ set -a && source .env.example && set +a
 go test -tags=integration ./internal/adapter/postgres/... ./internal/adapter/http/... ./internal/app/...
 ```
 
-Postgres + LocalStack (Phase 6 outbox publish, TST-13):
+Postgres + LocalStack (Phase 6 outbox publish, TST-13, Phase 7 inbound, TST-12):
 
 ```sh
 docker compose up -d postgres localstack
 set -a && source .env.example && set +a
-go test -tags=integration ./internal/adapter/postgres/... -run 'TestOutbox'
+go test -tags=integration ./internal/adapter/postgres/... -run 'TestOutbox|TestInbound|TestHandleInbound'
 ```
 
 Keycloak (TST-07):
@@ -65,7 +71,8 @@ Files:
 - `internal/adapter/postgres/uow_integration_test.go` — atomic commit/rollback, duplicate wallet, money round-trip, concurrent 80.00 bets on 100.00
 - `internal/adapter/postgres/isolated_db_integration_test.go` — one `wagering_it_*` database per test (does not migrate the Compose `wagering` database)
 - `internal/adapter/postgres/outbox_integration_test.go` — claim `SKIP LOCKED`, relay publish, two publishers (TST-13), publish-before-ack recovery
-- `internal/composition/start_stop_integration_test.go` — Fx start/stop including the outbox worker
+- `internal/adapter/postgres/inbound_integration_test.go` — inbox atomicity, consume, TST-12 skip-delete, DLQ, HTTP×SQS, application dedup
+- `internal/composition/start_stop_integration_test.go` — Fx start/stop including the outbox and inbound workers
 - `internal/adapter/auth/oidc_integration_test.go` — `TestOIDCVerifierRealIdP`
 - `internal/adapter/http/auth_integration_test.go` — `TestAuthRealIdP` (missing/invalid token, isolation, internal restriction, no wallet writes on 403)
 

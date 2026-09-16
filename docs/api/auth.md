@@ -72,4 +72,6 @@ Financial handlers are implemented in Phase 5 ([wallets.md](wallets.md), [wageri
 
 ## SQS
 
-Broker access uses AWS credentials (`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`). There is no consumer in this phase. Payload `providerId` on SQS is not an HTTP identity; the future consumer still applies domain rules.
+Broker access uses AWS credentials (`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`). Envelope
+`data.providerId` is the financial provider of the operation, not a JWT `azp`. Contract:
+[`docs/events/inbound.md`](../events/inbound.md).

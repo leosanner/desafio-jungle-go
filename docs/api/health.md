@@ -73,8 +73,9 @@ Unavailable because shutdown started:
 Clients must use the HTTP status (`200` vs `503`) as the primary signal; the body is diagnostic.
 
 SQS readiness means the process can reach the broker and the queues named by `SQS_WAGER_QUEUE_NAME`,
-`SQS_WAGER_DLQ_NAME` and `SQS_EVENTS_QUEUE_NAME` exist. It does **not** mean an inbound consumer is
-running (Phase 7). The outbox publisher (Phase 6) publishes to the events queue.
+`SQS_WAGER_DLQ_NAME` and `SQS_EVENTS_QUEUE_NAME` exist. It does **not** mean the inbound consumer
+has drained the queue. The inbound worker consumes `wager-transactions.fifo`; the outbox publisher
+publishes to the events queue.
 
 ## Authentication
 

@@ -5,10 +5,10 @@
 
 ## Overview
 
-Phase 6 of a Go + Uber Fx wagering service: hexagonal layout, stdlib HTTP, PostgreSQL via `pgx`,
+Phase 7 of a Go + Uber Fx wagering service: hexagonal layout, stdlib HTTP, PostgreSQL via `pgx`,
 golang-migrate, LocalStack SQS queues, a **pure domain model**, **financial persistence**, **OIDC
-authentication**, **HTTP use cases**, and a **concurrent outbox publisher** (SKIP LOCKED claim,
-SQS FIFO `wager-events.fifo`). There is still no SQS consumer or pending-reference worker.
+authentication**, **HTTP use cases**, a **concurrent outbox publisher**, and an **SQS inbound
+consumer** with a transactional inbox. There is still no pending-reference worker.
 
 - Module: `github.com/leosanner/desafio-jungle-go` ([ADR 0001](docs/adr/0001-package-layout-and-layer-boundaries.md))
 - Go 1.25, `net/http` ServeMux, `log/slog` JSON ([ADR 0002](docs/adr/0002-go-version-and-http-router.md))
@@ -53,7 +53,8 @@ API. **sqlc** is not used in Phase 1 (optional later, not chosen).
 **Migrations (accepted):** golang-migrate v4, SQL files in `migrations/` with up and down.
 Baseline `000001_bootstrap` creates schema `wagering`. `000002_financial_schema` adds `wallets`,
 `wager_transactions`, `wallet_ledger_entries` (BIGINT minor units, uniqueness/check constraints,
-append-only ledger trigger). `000003_outbox` adds `outbox_events`. The app runs migrate Up on start
+append-only ledger trigger). `000003_outbox` adds `outbox_events`. `000004_inbox` adds
+`inbox_messages`. The app runs migrate Up on start
 from `MIGRATIONS_PATH`. Rollback is a CLI operation, not automatic on shutdown.
 
 [ADR 0003](docs/adr/0003-database-access-and-migrations.md).
@@ -64,8 +65,9 @@ from `MIGRATIONS_PATH`. Rollback is a CLI operation, not automatic on shutdown.
 **Unit of work (proposed):** [ADR 0009](docs/adr/0009-sql-unit-of-work.md). Application ports
 `UnitOfWork` and repositories; `Within(ctx, func(ctx, Repositories) error)` opens one `pgx.Tx`,
 injects tx-scoped repos, commits on `nil`, rolls back on error or panic. Repositories never begin
-their own transactions. `Repositories.Outbox` joins the same commit ([ADR 0014](docs/adr/0014-outbox-persistence.md)).
-Inbox remains later. Unique/check/lock errors map by `SQLSTATE` to classifiable errors
+their own transactions. `Repositories.Outbox` and `Repositories.Inbox` join the same commit
+([ADR 0014](docs/adr/0014-outbox-persistence.md), [ADR 0017](docs/adr/0017-inbox-persistence.md)).
+Unique/check/lock errors map by `SQLSTATE` to classifiable errors
 (`errors.Is`), never by message string. Financial reads that decide a debit or credit run inside
 the same `Within`.
 
@@ -113,11 +115,18 @@ uses `INSUFFICIENT_FUNDS_REVERSAL`, not `INSUFFICIENT_FUNDS`.
 
 ## Inbox and SQS consumer
 
-**Provisioned queues (Phase 1):** `wager-transactions.fifo` and `wager-transactions-dlq.fifo` with
-redrive. Message contracts, visibility timeout, attempts, invalid messages, and inbound
-`MessageGroupId`/`MessageDeduplicationId` — _TBD_ (Phase 7).
+**Proposed:** [ADR 0017](docs/adr/0017-inbox-persistence.md). `wagering.inbox_messages` is unique on
+`(consumer_name, message_id)`. Hash is SHA-256 of the raw SQS body. Completed rows are inserted in
+the same `Within` as domain, ledger and outbox. HTTP `Submit` does not write inbox rows.
 
-See [`docs/events/README.md`](docs/events/README.md).
+**Proposed:** [ADR 0018](docs/adr/0018-sqs-inbound-consume.md). Worker long-polls
+`wager-transactions.fifo`. Envelope `messageId` is inbox identity. Delete after commit. Transient
+failures change visibility with exponential backoff; permanent errors go to
+`wager-transactions-dlq.fifo`. Producers set `MessageGroupId=walletId` and
+`MessageDeduplicationId=messageId`. `data.providerId` is queue-gated, not a JWT. SIGTERM cancels
+receive and finishes or releases in-flight visibility.
+
+Contract: [`docs/events/inbound.md`](docs/events/inbound.md).
 
 ## Outbox and publishing
 
@@ -146,7 +155,9 @@ id. Path/body `providerId` must match that identity. Wallet routes are internal-
 paths are isolated per `azp`. Health endpoints stay public ([`docs/api/health.md`](docs/api/health.md)).
 Contract: [`docs/api/auth.md`](docs/api/auth.md).
 
-SQS is gated by AWS credentials (LocalStack dummies in Compose). There is no consumer yet.
+SQS is gated by AWS credentials (LocalStack dummies in Compose). The inbound consumer treats
+`data.providerId` as the financial provider, not as an HTTP JWT identity
+([ADR 0018](docs/adr/0018-sqs-inbound-consume.md)).
 
 ## Uber Fx usage and shutdown
 
@@ -157,7 +168,9 @@ SQS is gated by AWS credentials (LocalStack dummies in Compose). There is no con
 - HTTP: Listen synchronously, Serve asynchronously, `Shutdown` on stop.
 - Readiness fails as soon as shutdown starts.
 - `OnStop` runs in reverse order; hooks live on the resource constructor.
-- Outbox worker: cancel poll, finish the in-flight batch within a lease-bounded context, wait on `done`. SQS consumer and pending-reference workers remain later.
+- Outbox worker: cancel poll, finish the in-flight batch within a lease-bounded context, wait on `done`.
+- Inbound worker: cancel long-poll, finish or release visibility of the in-flight message, wait on `done`.
+  Pending-reference workers remain later.
 
 [ADR 0004](docs/adr/0004-fx-lifecycle-and-shutdown.md).
 
@@ -177,21 +190,22 @@ Reconciliation divergences are logged (`walletId`, entry count, no full payload)
 
 ## Limitations, interpretations and unfinished work
 
-Phase 6 adds the outbox publisher worker. Still unfinished:
+Phase 7 adds the SQS inbound consumer and inbox. Still unfinished:
 
-- No SQS consumer or pending-reference worker. `PENDING_REFERENCE` is persisted and returned as
-  `202` until Phase 8 resumes it.
-- ADRs 0006–0016 are **Proposed** until confirmed.
+- No pending-reference worker. `PENDING_REFERENCE` is persisted, the SQS message is deleted, and
+  HTTP returns `202` until Phase 8 resumes it.
+- ADRs 0006–0018 are **Proposed** until confirmed.
 - STK-05 is documented and implemented: `pgx/v5` ([ADR 0003](docs/adr/0003-database-access-and-migrations.md)),
   `BIGINT` minor units ([ADR 0006](docs/adr/0006-money-representation.md), migration `000002`),
   unit of work ([ADR 0009](docs/adr/0009-sql-unit-of-work.md)), outbox insert ([ADR 0014](docs/adr/0014-outbox-persistence.md),
-  migration `000003`).
-- Inbox persistence remains later (same `Repositories` / `Within` pattern).
+  migration `000003`), inbox ([ADR 0017](docs/adr/0017-inbox-persistence.md), migration `000004`).
 - TST-04 is covered by `-tags=integration` tests in `internal/adapter/postgres`.
   HTTP use cases: `TestHTTPPhase5UseCases`, `TestHTTPConcurrentSameBet`, `TestHTTPTwoBetsOnHundred`,
   `TestHTTPDistinctWalletsParallel` (`POSTGRES_DSN`). Phase 6 outbox: `TestOutboxClaimSkipLocked`,
   `TestOutboxTwoPublishersContend`, `TestOutboxRecoverPublishBeforeAck` (`POSTGRES_DSN` + LocalStack
-  for publish). TST-07 needs Keycloak and `OIDC_ISSUER`.
+  for publish). Phase 7 inbound: `TestInboundConsumerProcessesBet`, `TestInboundRecoverCommitBeforeDelete`,
+  `TestInboundInvalidMessageGoesToDLQ`, `TestInboundHTTPxSQSSameKeyOneDebit` (`POSTGRES_DSN` + LocalStack).
+  TST-07 needs Keycloak and `OIDC_ISSUER`.
   Multi-instance runs remain Phase 9
   ([ADR 0005](docs/adr/0005-test-strategy-initial.md)).
 - Health endpoints stay public.
