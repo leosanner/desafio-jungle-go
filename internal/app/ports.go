@@ -18,24 +18,45 @@ var (
 	ErrConflict = errors.New("conflict")
 	// ErrOptimisticLock means UPDATE ... WHERE id AND version = $n affected 0 rows.
 	ErrOptimisticLock = errors.New("optimistic lock failure")
+	// ErrUnavailable is a retryable infrastructure failure (deadlock, serialization).
+	ErrUnavailable = errors.New("unavailable")
 )
 
+// Clock is injected so tests do not depend on wall time.
+type Clock interface {
+	Now() time.Time
+}
+
+// IDGenerator assigns stable unique identifiers (UUID v7 in production).
+type IDGenerator interface {
+	NewID() string
+}
+
+// Metrics is a narrow Phase 5 port; full observability is Phase 10.
+type Metrics interface {
+	IncReconciliationDivergence()
+}
+
+// NopMetrics discards metric increments.
+type NopMetrics struct{}
+
+func (NopMetrics) IncReconciliationDivergence() {}
+
 // UnitOfWork is the SQL transaction boundary without leaking driver types.
-// Inbox and outbox ports will join Repositories later; Within stays unchanged.
 type UnitOfWork interface {
 	// Within runs fn in a single SQL transaction. Commit if fn returns nil;
 	// rollback on error or panic. Repositories in Repositories MUST share that
-	// transaction so wallet, ledger and transaction writes commit atomically.
+	// transaction so wallet, ledger, transaction and outbox writes commit atomically.
 	Within(ctx context.Context, fn func(ctx context.Context, repos Repositories) error) error
 }
 
 // Repositories groups persistence ports that share the transaction opened by
-// UnitOfWork.Within. Inbox and outbox fields will be added here later without
-// changing Within's signature.
+// UnitOfWork.Within. Inbox will join later without changing Within's signature.
 type Repositories struct {
 	Wallets      WalletRepository
 	Transactions TransactionRepository
 	Ledger       LedgerRepository
+	Outbox       OutboxRepository
 }
 
 // WalletRepository loads and persists Wallet aggregates.
@@ -59,6 +80,9 @@ type TransactionRepository interface {
 	GetByID(ctx context.Context, id string) (domain.WagerTransaction, error) // ErrNotFound
 	GetByProviderExternalID(ctx context.Context, providerID, externalID string) (domain.WagerTransaction, error)
 	GetByProviderIdempotencyKey(ctx context.Context, providerID, key string) (domain.WagerTransaction, error)
+	// ListProcessedReversals returns PROCESSED REFUND/ROLLBACK rows that resolved
+	// to the given internal transaction id.
+	ListProcessedReversals(ctx context.Context, resolvedReferenceID string) ([]domain.WagerTransaction, error)
 	Insert(ctx context.Context, tx domain.WagerTransaction) error // ErrConflict on unique identity
 	Update(ctx context.Context, tx domain.WagerTransaction) error
 }
@@ -69,6 +93,26 @@ type LedgerRepository interface {
 	// ListByWallet returns entries in stable order (created_at ASC, id ASC).
 	// If id != "", the cursor (createdAt, id) is exclusive: (created_at, id) > cursor.
 	// If id == "", listing starts from the beginning. limit must be > 0; the adapter
-	// may cap it. HTTP opaque cursors are deferred to the HTTP layer.
+	// may cap it.
 	ListByWallet(ctx context.Context, walletID string, createdAt time.Time, id string, limit int) ([]domain.WalletLedgerEntry, error)
+	// SumByWallet returns Σcredits − Σdebits in currency and the entry count.
+	// An empty ledger returns a zero amount in currency and 0 entries.
+	SumByWallet(ctx context.Context, walletID, currency string) (domain.Money, int, error)
+}
+
+// OutboxRecord is an unpublished domain event snapshot (ADR 0014).
+type OutboxRecord struct {
+	EventID       string
+	EventType     string
+	EventVersion  int
+	AggregateID   string
+	CorrelationID string
+	CausationID   string
+	OccurredAt    time.Time
+	Payload       []byte
+}
+
+// OutboxRepository inserts unpublished event rows in the unit-of-work transaction.
+type OutboxRepository interface {
+	Insert(ctx context.Context, rec OutboxRecord) error
 }

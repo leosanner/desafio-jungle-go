@@ -37,12 +37,12 @@ func TestMapError(t *testing.T) {
 		{
 			name: "deadlock",
 			err:  &pgconn.PgError{Code: pgerrcode.DeadlockDetected},
-			want: ErrRetryable,
+			want: app.ErrUnavailable,
 		},
 		{
 			name: "serialization failure",
 			err:  &pgconn.PgError{Code: pgerrcode.SerializationFailure},
-			want: ErrRetryable,
+			want: app.ErrUnavailable,
 		},
 	}
 

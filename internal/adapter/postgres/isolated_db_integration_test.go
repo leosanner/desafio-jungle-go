@@ -373,3 +373,18 @@ func assertFinancialTables(t *testing.T, pool *Pool, want bool) {
 		}
 	}
 }
+
+func assertOutboxTable(t *testing.T, pool *Pool, want bool) {
+	t.Helper()
+	var exists bool
+	if err := pool.pool.QueryRow(t.Context(), `
+		SELECT EXISTS (
+			SELECT 1 FROM information_schema.tables
+			WHERE table_schema = 'wagering' AND table_name = 'outbox_events'
+		)`).Scan(&exists); err != nil {
+		t.Fatalf("outbox table exists: %v", err)
+	}
+	if exists != want {
+		t.Errorf("table wagering.outbox_events exists=%v, want %v", exists, want)
+	}
+}

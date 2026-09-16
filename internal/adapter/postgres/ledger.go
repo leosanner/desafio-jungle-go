@@ -11,7 +11,7 @@ import (
 
 const (
 	ledgerColumns      = `id, wallet_id, transaction_id, direction, amount_minor, currency, balance_before_minor, balance_after_minor, created_at`
-	maxLedgerListLimit = 100
+	maxLedgerListLimit = 101
 )
 
 type ledgerRepo struct {
@@ -84,6 +84,29 @@ func (r *ledgerRepo) ListByWallet(ctx context.Context, walletID string, createdA
 		return nil, mapError(err)
 	}
 	return out, nil
+}
+
+func (r *ledgerRepo) SumByWallet(ctx context.Context, walletID, currency string) (domain.Money, int, error) {
+	const q = `
+		SELECT
+			COALESCE(SUM(CASE WHEN direction = 'CREDIT' THEN amount_minor ELSE -amount_minor END), 0)::bigint,
+			COUNT(*)::int
+		FROM wagering.wallet_ledger_entries
+		WHERE wallet_id = $1`
+	var minor int64
+	var n int
+	if err := r.q.QueryRow(ctx, q, walletID).Scan(&minor, &n); err != nil {
+		zero, zerr := domain.Zero(currency)
+		if zerr != nil {
+			return domain.Money{}, 0, mapError(err)
+		}
+		return zero, 0, mapError(err)
+	}
+	sum, err := domain.MoneyFromMinor(minor, currency)
+	if err != nil {
+		return domain.Money{}, 0, fmt.Errorf("postgres: ledger sum: %w", err)
+	}
+	return sum, n, nil
 }
 
 func scanLedger(row scanner) (domain.WalletLedgerEntry, error) {

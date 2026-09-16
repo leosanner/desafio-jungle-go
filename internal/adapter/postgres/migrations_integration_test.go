@@ -27,9 +27,18 @@ func TestMigrationsUpAndDown(t *testing.T) {
 
 	assertSchemaExists(t, pool)
 	assertFinancialTables(t, pool, true)
+	assertOutboxTable(t, pool, true)
 
 	if err := RunSteps(path, mdsn, -1); err != nil {
 		t.Fatalf("RunSteps(-1): %v", err)
+	}
+
+	assertSchemaExists(t, pool)
+	assertOutboxTable(t, pool, false)
+	assertFinancialTables(t, pool, true)
+
+	if err := RunSteps(path, mdsn, -1); err != nil {
+		t.Fatalf("RunSteps(-1) financial: %v", err)
 	}
 
 	assertSchemaExists(t, pool)
@@ -41,4 +50,5 @@ func TestMigrationsUpAndDown(t *testing.T) {
 
 	assertSchemaExists(t, pool)
 	assertFinancialTables(t, pool, true)
+	assertOutboxTable(t, pool, true)
 }

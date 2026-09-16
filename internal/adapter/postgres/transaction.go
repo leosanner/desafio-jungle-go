@@ -36,6 +36,31 @@ func (r *transactionRepo) GetByProviderIdempotencyKey(ctx context.Context, provi
 	return scanTransaction(r.q.QueryRow(ctx, q, providerID, key))
 }
 
+func (r *transactionRepo) ListProcessedReversals(ctx context.Context, resolvedReferenceID string) ([]domain.WagerTransaction, error) {
+	const q = `SELECT ` + transactionColumns + `
+		FROM wagering.wager_transactions
+		WHERE resolved_reference_id = $1
+		  AND status = 'PROCESSED'
+		  AND kind IN ('REFUND', 'ROLLBACK')`
+	rs, err := r.q.Query(ctx, q, resolvedReferenceID)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	defer rs.Close()
+	var out []domain.WagerTransaction
+	for rs.Next() {
+		tx, err := scanTransaction(rs)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, tx)
+	}
+	if err := rs.Err(); err != nil {
+		return nil, mapError(err)
+	}
+	return out, nil
+}
+
 func (r *transactionRepo) Insert(ctx context.Context, tx domain.WagerTransaction) error {
 	resultMinor, resultCurrency := resultBalanceArgs(tx)
 	// attempt_count / next_attempt_at are omitted so the schema defaults apply.

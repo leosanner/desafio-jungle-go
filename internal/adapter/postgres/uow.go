@@ -40,6 +40,7 @@ func (u *unitOfWork) Within(ctx context.Context, fn func(ctx context.Context, re
 		Wallets:      &walletRepo{q: tx},
 		Transactions: &transactionRepo{q: tx},
 		Ledger:       &ledgerRepo{q: tx},
+		Outbox:       &outboxRepo{q: tx},
 	}
 
 	if err := fn(ctx, repos); err != nil {

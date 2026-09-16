@@ -37,7 +37,7 @@ func mapError(err error) error {
 		case pgerrcode.CheckViolation:
 			return fmt.Errorf("postgres: %w: %w", ErrCheckViolation, err)
 		case pgerrcode.DeadlockDetected, pgerrcode.SerializationFailure:
-			return fmt.Errorf("postgres: %w: %w", ErrRetryable, err)
+			return fmt.Errorf("postgres: %w: %w: %w", app.ErrUnavailable, ErrRetryable, err)
 		}
 	}
 	return fmt.Errorf("postgres: %w", err)
