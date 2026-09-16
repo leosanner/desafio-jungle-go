@@ -1,7 +1,6 @@
 # Health checks
 
-Public liveness and readiness probes (`init.md` §9). These are the only HTTP routes in Phase 1.
-There is **no authentication** on `/health/*`.
+Public liveness and readiness probes (`init.md` §9). There is **no authentication** on `/health/*`.
 
 Router: stdlib `net/http` ServeMux ([ADR 0002](../adr/0002-go-version-and-http-router.md)).
 Shutdown behaviour: [ADR 0004](../adr/0004-fx-lifecycle-and-shutdown.md).
@@ -73,4 +72,4 @@ and `SQS_WAGER_DLQ_NAME` exist. It does **not** mean a consumer is running (Phas
 
 ## Authentication
 
-None. Both endpoints are public. Business routes (later) require OIDC; these probes stay public.
+None. Both endpoints are public. Business routes require OIDC ([auth.md](auth.md)); these probes stay public.

@@ -3,9 +3,9 @@
 Go + Uber Fx service that processes financial operations from game providers via HTTP and SQS, backed by
 PostgreSQL, Keycloak and LocalStack. Full challenge statement (in Portuguese) in [`init.md`](init.md).
 
-> Phase 3: process skeleton, pure domain model, and **financial persistence** (schema `000002`,
-> repositories, unit of work). There is **no wagering API** and **no authentication** yet. Keycloak is
-> started but unused by the app. See [`docs/roadmap.md`](docs/roadmap.md).
+> Phase 4: process skeleton, pure domain, financial persistence, and **OIDC authentication**
+> (Keycloak `client_credentials`, JWKS). Business routes are registered and authorized; financial
+> handlers still return `501`. See [`docs/roadmap.md`](docs/roadmap.md).
 
 ## Prerequisites
 
@@ -32,6 +32,10 @@ Copy [`.env.example`](.env.example) and adjust. Do not commit real secrets.
 | `SQS_WAGER_DLQ_NAME` | FIFO DLQ name: `wager-transactions-dlq.fifo` |
 | `FX_START_TIMEOUT` | Fx start timeout (Go duration, e.g. `15s`) |
 | `FX_STOP_TIMEOUT` | Fx stop timeout (Go duration, e.g. `30s`) |
+| `OIDC_ISSUER` | Expected JWT `iss` (Keycloak realm URL, no trailing slash) |
+| `OIDC_AUDIENCE` | Expected JWT `aud` (`wagering-api`) |
+| `OIDC_JWKS_URL` | Optional JWKS URL; defaults to `{OIDC_ISSUER}/protocol/openid-connect/certs` |
+| `OIDC_INTERNAL_CLIENT` | OAuth client id of the internal wallet service (`wagering-internal`) |
 
 ## Running the environment
 
@@ -89,8 +93,31 @@ See [ADR 0003](docs/adr/0003-database-access-and-migrations.md).
 
 ## Authentication and test identities
 
-Not used in Phase 3. Health endpoints are public. Keycloak is up for later phases; provisioning of
-realms, clients and test users will be documented when authentication is implemented.
+Keycloak realm `wagering` is imported automatically from
+[`docker/keycloak/realm-wagering.json`](docker/keycloak/realm-wagering.json). Grant:
+`client_credentials`. Local dummy secrets:
+
+| Client | Secret | Role |
+| --- | --- | --- |
+| `wagering-internal` | `internal-secret` | Wallet routes |
+| `provider-a` | `provider-a-secret` | `providerId=provider-a` |
+| `provider-b` | `provider-b-secret` | `providerId=provider-b` |
+
+Audience: `wagering-api`. Contract: [`docs/api/auth.md`](docs/api/auth.md). Health endpoints stay public.
+
+```sh
+ACCESS_TOKEN=$(curl -sS -X POST http://localhost:8081/realms/wagering/protocol/openid-connect/token \
+  -d grant_type=client_credentials \
+  -d client_id=provider-a \
+  -d client_secret=provider-a-secret | python3 -c 'import json,sys; print(json.load(sys.stdin)["access_token"])')
+curl -sS http://localhost:8080/providers/provider-a/wagering/transactions/tx-1 \
+  -H "Authorization: Bearer $ACCESS_TOKEN"
+```
+
+A token obtained from `http://localhost:8081` has `iss` `http://localhost:8081/realms/wagering`
+and is rejected by the Compose app process, which is configured with
+`http://keycloak:8080/realms/wagering`. Use host `.env.example` values when running the binary on
+the host.
 
 ## Example calls
 
@@ -105,8 +132,8 @@ curl -sS -o /tmp/ready.json -w "%{http_code}\n" http://localhost:8080/health/rea
 - Ready: `200` and `{"status":"ok"}` when PostgreSQL and SQS pass checks; `503` otherwise,
   including once shutdown has started.
 
-Full contract: [`docs/api/health.md`](docs/api/health.md). There are no `/wallets` or
-`/wagering/transactions` routes yet.
+Full contract: [`docs/api/health.md`](docs/api/health.md). Business routes require a Bearer token
+([`docs/api/auth.md`](docs/api/auth.md)) and return `501` until Phase 5 implements the use cases.
 
 ## Tests
 
@@ -125,10 +152,10 @@ Integration tests use build tag `integration`. They skip if required env is unse
 That skip is not a substitute for CI with real containers.
 
 **TST-04** (postgres migrations, constraints, ledger immutability, financial atomicity) needs
-`POSTGRES_DSN` only. Keycloak and SQS are not required:
+`POSTGRES_DSN` only. **TST-07** (auth against the real IdP) needs Keycloak and `OIDC_ISSUER`:
 
 ```sh
-docker compose up -d postgres
+docker compose up -d postgres keycloak localstack
 set -a && source .env.example && set +a
 go test -tags=integration ./...
 ```

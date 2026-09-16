@@ -9,8 +9,8 @@ the `spec-audit` skill or when completing a deliverable.
 
 | ID | Criterion | Status | Evidence |
 | --- | --- | --- | --- |
-| ELIM-01 | Effective authentication on every business endpoint | — | |
-| ELIM-02 | No unauthorized access to operations or transactions | — | |
+| ELIM-01 | Effective authentication on every business endpoint | ✅ | Middleware on all registered business routes (`internal/adapter/http/server.go`); missing/invalid Bearer → 401 (`TestBusinessRouteMissingToken`, `TestBusinessRouteInvalidToken`, `TestAuthRealIdP`). Health stays public. Handlers are Phase 4 stubs (`501`) |
+| ELIM-02 | No unauthorized access to operations or transactions | ✅ | Path isolation `TestProviderIsolationOnPath` / `TestAuthRealIdP/provider_isolation`; wallets `TestWalletRestrictedToInternal`; body `providerId` `TestPostWageringRejectsInternalAndBodyMismatch`; generic 403 `TestForbiddenBodyDoesNotLeak`. `GET /wagering/transactions/{id}` ownership is Phase 5 |
 | ELIM-03 | No floating-point money arithmetic | 🚧 | Domain: `internal/domain` (`TestDomainSourcesHaveNoFloatMoney`, `TestParseMoneyRejectsInvalid`, `TestMoneyJSON`). Persistence: `migrations/000002_financial_schema.up.sql` (`BIGINT` `*_minor`); `internal/adapter/postgres/repo.go` (`moneyFromMinorScan` → `int64`). HTTP/SQS money codecs not migrated |
 | ELIM-04 | No negative balance under concurrency | 🚧 | Schema `CHECK (balance_minor >= 0)`; `TestConcurrentBetsSerializePerWallet` (100.00 + two 80.00 → balance 20.00). Not yet proven with ≥3 processes |
 | ELIM-05 | No duplicated movement | — | |
@@ -18,7 +18,7 @@ the `spec-audit` skill or when completing a deliverable.
 | ELIM-07 | Works correctly with multiple instances | — | |
 | ELIM-08 | No publishing before commit | — | |
 | ELIM-09 | Auditable ledger | 🚧 | `migrations/000002_financial_schema.up.sql` (`wallet_ledger_entries`, `UNIQUE (wallet_id, transaction_id)`, trigger `wallet_ledger_entries_append_only`, `REVOKE UPDATE, DELETE, TRUNCATE`); `TestLedgerAppendOnly`; `internal/adapter/postgres/ledger.go`. HTTP `GET .../ledger` later |
-| ELIM-10 | Real PostgreSQL, SQS and IdP in tests (no full mocking) | 🚧 | TST-04 uses real PostgreSQL (`-tags=integration`, skip-if-no-`POSTGRES_DSN`). Keycloak and SQS not yet in this suite |
+| ELIM-10 | Real PostgreSQL, SQS and IdP in tests (no full mocking) | 🚧 | TST-04 uses real PostgreSQL (`-tags=integration`, skip-if-no-`POSTGRES_DSN`). TST-07 uses real Keycloak (`OIDC_ISSUER`). SQS not yet in this suite |
 
 ## Stack and composition (§4)
 
@@ -26,7 +26,7 @@ the `spec-audit` skill or when completing a deliverable.
 | --- | --- | --- | --- | --- |
 | STK-01 | Go version declared in `go.mod` and Dockerfile | ✅ | `go.mod` (`go 1.25.11`); `Dockerfile` (`golang:1.25-bookworm`); [ADR 0002](../adr/0002-go-version-and-http-router.md) | |
 | STK-02 | `go.mod` and `go.sum` versioned | ✅ | `go.mod`, `go.sum` (`github.com/leosanner/desafio-jungle-go`) | |
-| STK-03 | Docker Compose with PostgreSQL, IdP and LocalStack/MiniStack | ✅ | `docker-compose.yml` (postgres 16, Keycloak 26, LocalStack 4.6); [test-dependencies.md](../runbooks/test-dependencies.md) | Keycloak unused by the app in Phase 1 |
+| STK-03 | Docker Compose with PostgreSQL, IdP and LocalStack/MiniStack | ✅ | `docker-compose.yml` (postgres 16, Keycloak 26 + realm import, LocalStack 4.6); [test-dependencies.md](../runbooks/test-dependencies.md) | Realm `wagering` imported from `docker/keycloak/realm-wagering.json` |
 | STK-04 | Versioned migrations with documented apply and rollback | ✅ | `migrations/000001_bootstrap.up.sql` / `.down.sql`; `migrations/000002_financial_schema.up.sql` / `.down.sql`; [README](../../README.md) Migrations; [ADR 0003](../adr/0003-database-access-and-migrations.md) | App Up on start from `MIGRATIONS_PATH`; CLI `down 1`; schema `wagering` plus financial tables |
 | STK-05 | DB library, `Money` mapping and cross-repository transaction documented | ✅ | [ADR 0003](../adr/0003-database-access-and-migrations.md) (`pgx/v5`); [ADR 0006](../adr/0006-money-representation.md) (`int64` cents → `BIGINT`, Proposed); [ADR 0009](../adr/0009-sql-unit-of-work.md) (Proposed); `internal/app/ports.go` (`UnitOfWork`); `internal/adapter/postgres/uow.go`; `migrations/000002_financial_schema.up.sql`; `TestMapError`; `TestUnitOfWorkAtomicity` | ADRs 0006/0009 still Proposed |
 | FX-01 | Composition via `fx.Module`, `fx.Provide`, `fx.Invoke` with constructors | ✅ | `internal/composition/`; `cmd/wagering/main.go`; `TestValidateApp`; [ADR 0004](../adr/0004-fx-lifecycle-and-shutdown.md) | |
@@ -40,13 +40,13 @@ the `spec-audit` skill or when completing a deliverable.
 
 | ID | Requirement | Status | Evidence | Notes |
 | --- | --- | --- | --- | --- |
-| AUTH-01 | External OAuth 2.0/OIDC IdP (Keycloak) with automatic provisioning | — | | |
-| AUTH-02 | `client_credentials` between services | — | | |
-| AUTH-03 | Authorized `providerId` derived from the identity | — | | |
-| AUTH-04 | Provider accesses only its own transactions, including replays | — | | |
-| AUTH-05 | Wallet operations restricted to the internal service | — | | |
-| AUTH-06 | Broker access controlled by credentials/policies | — | | |
-| AUTH-07 | IdP, validation and permission rationale in `ARCHITECTURE.md` | — | | |
+| AUTH-01 | External OAuth 2.0/OIDC IdP (Keycloak) with automatic provisioning | ✅ | Compose Keycloak `start-dev --import-realm`; [`docker/keycloak/realm-wagering.json`](../../docker/keycloak/realm-wagering.json); [ADR 0011](../adr/0011-oidc-keycloak-auth.md) | |
+| AUTH-02 | `client_credentials` between services | ✅ | Realm confidential clients; [auth.md](../api/auth.md); `TestOIDCVerifierRealIdP` | |
+| AUTH-03 | Authorized `providerId` derived from the identity | ✅ | JWT `azp` → `app.Actor.ProviderID` (`internal/adapter/auth/verifier.go`); [ADR 0011](../adr/0011-oidc-keycloak-auth.md); `TestVerifyAcceptsProviderToken` | Body/path never trusted alone |
+| AUTH-04 | Provider accesses only its own transactions, including replays | 🚧 | Path isolation `TestProviderIsolationOnPath`, `TestAuthRealIdP`; POST body `providerId` must match `azp`. Persisted replay isolation is Phase 5 | |
+| AUTH-05 | Wallet operations restricted to the internal service | ✅ | `requireInternal` on wallet routes; `OIDC_INTERNAL_CLIENT`; `TestWalletRestrictedToInternal`; `TestAuthRealIdP/provider_cannot_open_wallet` | |
+| AUTH-06 | Broker access controlled by credentials/policies | 🚧 | LocalStack/AWS static keys required (`AWS_ACCESS_KEY_ID` / `SECRET`); [ADR 0011](../adr/0011-oidc-keycloak-auth.md). No consumer yet | |
+| AUTH-07 | IdP, validation and permission rationale in `ARCHITECTURE.md` | ✅ | [ARCHITECTURE.md](../../ARCHITECTURE.md) Authentication; [ADR 0011](../adr/0011-oidc-keycloak-auth.md); [auth.md](../api/auth.md) | ADR Proposed |
 
 ## Guarantees (§5)
 
@@ -137,7 +137,7 @@ the `spec-audit` skill or when completing a deliverable.
 | HTTP-07 | Canonical hash (sorted-key JSON), equivalent across HTTP/SQS, documented | — | | |
 | HTTP-08 | Replay with `idempotentReplay: true` and original balance; conflict on different payload | 🚧 | `CheckIdempotencyReplay`; `TestIdempotencyPayloadConflict`; `ResultBalance` | HTTP adapter later | |
 | HTTP-09 | Same `(providerId, externalTransactionId)` cannot be re-applied under another key | 🚧 | `CheckExternalIdentity`; `000002` `wager_transactions_provider_external_id_uidx` | HTTP adapter later | |
-| HTTP-10 | Documented statuses and bodies: invalid, conflict, rejection, pending, unavailable | — | | |
+| HTTP-10 | Documented statuses and bodies: invalid, conflict, rejection, pending, unavailable | 🚧 | Auth statuses in [auth.md](../api/auth.md) (401/403/400/501/503). Financial status catalog still Phase 5 | |
 | HTTP-11 | `POST /wallets/:walletId/reconciliation` on a consistent snapshot, without changing the balance | — | | |
 | HTTP-12 | Divergence reported in response, logs and a metric | — | | |
 | HTTP-13 | `GET /health/live` and `GET /health/ready` (PostgreSQL and SQS) | ✅ | `internal/adapter/http/health.go`; `health_test.go`; [docs/api/health.md](../api/health.md) | Public; ready probes postgres + both SQS queues; 503 on shutdown |
@@ -186,7 +186,7 @@ the `spec-audit` skill or when completing a deliverable.
 | TST-04 | Integration: migrations, constraints, immutability, atomicity | ✅ | `TestMigrationsUpAndDown`; `TestFinancialSchemaConstraints`; `TestLedgerAppendOnly`; `TestUnitOfWorkAtomicity`; `go test -tags=integration ./internal/adapter/postgres/...` with `POSTGRES_DSN`. [integration.md](../runbooks/integration.md) | Skip-if-no-env; Keycloak/SQS not required |
 | TST-05 | Integration: inbox, redelivery, concurrent outbox, retry, DLQ, recovery | — | | |
 | TST-06 | Integration: Fx composition, start/stop and resource release | 🚧 | `TestValidateApp`; `TestInvalidConfigFailsStart`; `start_stop_integration_test.go` (`-tags=integration`) | Graph validated in unit tests; full start/stop against real infra still optional/skip |
-| TST-07 | Auth: real IdP; missing/invalid/expired; isolation; internal restriction; no effects | — | | |
+| TST-07 | Auth: real IdP; missing/invalid/expired; isolation; internal restriction; no effects | ✅ | Unit: `internal/adapter/auth/verifier_test.go`, `internal/adapter/http/auth_test.go` (expired, HMAC, isolation, no handler on 401). Integration: `TestOIDCVerifierRealIdP`, `TestAuthRealIdP` (`-tags=integration`, `OIDC_ISSUER`). Expired covered in unit tests (real Keycloak tokens are not expired) | |
 | TST-08 | Same bet 50× in parallel → one debit | — | | |
 | TST-09 | Two 80.00 bets on 100.00 | 🚧 | `TestConcurrentBetsSerializePerWallet` | Same-process UoW; HTTP and multi-instance later |
 | TST-10 | Distinct wallets in parallel | — | | |
@@ -204,10 +204,10 @@ the `spec-audit` skill or when completing a deliverable.
 | ID | Requirement | Status | Evidence | Notes |
 | --- | --- | --- | --- | --- |
 | ENT-01 | Reproducible from a clean checkout | 🚧 | [README](../../README.md) | Phase 1 instructions written; Compose/image/binary owned by other agents |
-| ENT-02 | README: prerequisites, env, queues, migrations, running, examples, tests | 🚧 | [README](../../README.md) | Phase 3: financial migrations and integration command documented; no wagering API or auth flows |
+| ENT-02 | README: prerequisites, env, queues, migrations, running, examples, tests | 🚧 | [README.md](../../README.md) | Phase 4: OIDC env, clients, token example; financial HTTP use cases still Phase 5 |
 | ENT-03 | `.env.example` without real secrets | ✅ | `.env.example` | Local dummy keys only |
-| ENT-04 | Automatic IdP provisioning and test identities | — | | Keycloak started in Compose for later phases; unused by the app |
-| ENT-05 | ARCHITECTURE.md with decisions, limitations, interpretations and unfinished work | 🚧 | [ARCHITECTURE.md](../../ARCHITECTURE.md); [docs/adr/](../adr/) | Phase 3 persistence summarized; ADRs 0006–0010 Proposed; hash and auth still TBD |
+| ENT-04 | Automatic IdP provisioning and test identities | ✅ | `docker/keycloak/realm-wagering.json`; Compose `--import-realm`; [auth.md](../api/auth.md); [README](../../README.md) Authentication | Local dummy client secrets |
+| ENT-05 | ARCHITECTURE.md with decisions, limitations, interpretations and unfinished work | 🚧 | [ARCHITECTURE.md](../../ARCHITECTURE.md); [docs/adr/](../adr/) | Phase 4 auth summarized; ADRs 0006–0011 Proposed; hash still TBD |
 | ENT-06 | `docker compose up --build`, `go test ./...`, `go test -race ./...`, `go vet ./...` | ✅ | [README](../../README.md); Compose stack healthy; unit/`vet`/`-race` pass | |
-| ENT-07 | Separate docs: test dependencies, integration, multiple instances, failures, build tags | 🚧 | [test-dependencies.md](../runbooks/test-dependencies.md); [integration.md](../runbooks/integration.md); [ADR 0005](../adr/0005-test-strategy-initial.md) | TST-04 runbook added; multi-instance / failure runbooks still placeholders |
+| ENT-07 | Separate docs: test dependencies, integration, multiple instances, failures, build tags | 🚧 | [test-dependencies.md](../runbooks/test-dependencies.md); [integration.md](../runbooks/integration.md); [ADR 0005](../adr/0005-test-strategy-initial.md) | TST-04 and TST-07 runbooks; multi-instance / failure runbooks still placeholders |
 | ENT-08 | `gofmt`-formatted code and reproducible dependencies | 🚧 | [ADR 0005](../adr/0005-test-strategy-initial.md); `gofmt -l .` in README | Domain added in Phase 2 |

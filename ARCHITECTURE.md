@@ -5,11 +5,12 @@
 
 ## Overview
 
-Phase 3 of a Go + Uber Fx wagering service: hexagonal layout, stdlib HTTP health checks,
+Phase 4 of a Go + Uber Fx wagering service: hexagonal layout, stdlib HTTP health checks,
 PostgreSQL via `pgx`, golang-migrate, LocalStack SQS queues, a **pure domain model** (`Money`,
-`Wallet`, `WagerTransaction`, ledger, operations, events), and **financial persistence** (schema,
-repositories, unit of work, per-wallet locking). There is still no wagering HTTP API,
-authentication on business routes, or background workers.
+`Wallet`, `WagerTransaction`, ledger, operations, events), **financial persistence** (schema,
+repositories, unit of work, per-wallet locking), and **OIDC authentication** against Keycloak
+(`client_credentials`, JWKS). There is still no wagering use-case HTTP implementation
+(protected routes return `501` after authorization) and no background workers.
 
 - Module: `github.com/leosanner/desafio-jungle-go` ([ADR 0001](docs/adr/0001-package-layout-and-layer-boundaries.md))
 - Go 1.25, `net/http` ServeMux, `log/slog` JSON ([ADR 0002](docs/adr/0002-go-version-and-http-router.md))
@@ -28,6 +29,7 @@ internal/app/
 internal/adapter/http
 internal/adapter/postgres
 internal/adapter/sqs
+internal/adapter/auth
 internal/composition/
 migrations/
 ```
@@ -120,15 +122,23 @@ Concurrent claim, backoff, recovery, destination and routing. — _TBD_
 
 ## Authentication and authorization
 
-IdP, token validation, permission model, broker access. — _TBD_
+**Proposed:** [ADR 0011](docs/adr/0011-oidc-keycloak-auth.md). Keycloak 26 is the external OIDC
+IdP. Realm `wagering` is imported from `docker/keycloak/realm-wagering.json`. Services use
+`client_credentials`. The API validates Bearer JWTs with `github.com/coreos/go-oidc/v3`
+(JWKS, `iss`, `aud`, `exp`, RS256). `providerId` is the token `azp`, except for
+`OIDC_INTERNAL_CLIENT` (`wagering-internal`), which is the wallet service and has no provider
+id. Path/body `providerId` must match that identity. Wallet routes are internal-only; provider
+paths are isolated per `azp`. Health endpoints stay public ([`docs/api/health.md`](docs/api/health.md)).
+Contract: [`docs/api/auth.md`](docs/api/auth.md).
 
-Keycloak is started by Docker Compose in Phase 1 but is **not** used by the application yet. Health
-endpoints are public and unauthenticated ([`docs/api/health.md`](docs/api/health.md)).
+SQS is gated by AWS credentials (LocalStack dummies in Compose). There is no consumer yet.
 
 ## Uber Fx usage and shutdown
 
 - One `fx.Module` per area; plain constructors; `fx.Invoke` only to run the HTTP server (and later workers).
 - Config validated on start; start/stop timeouts from `FX_START_TIMEOUT` / `FX_STOP_TIMEOUT`.
+- Check dependencies at startup (PostgreSQL ping, SQS queue exists, JWKS reachable) and fail fast
+  with a clear error.
 - HTTP: Listen synchronously, Serve asynchronously, `Shutdown` on stop.
 - Readiness fails as soon as shutdown starts.
 - `OnStop` runs in reverse order; hooks live on the resource constructor.
@@ -149,11 +159,11 @@ Correlation IDs on every business log line, metrics and tracing — _TBD_
 
 ## Limitations, interpretations and unfinished work
 
-Phase 3 has financial schema (`000002_financial_schema`), repositories, unit of work and per-wallet
-locking. Still unfinished:
+Phase 4 adds OIDC (`internal/adapter/auth`, Keycloak realm import, protected HTTP stubs). Still
+unfinished:
 
-- No wagering HTTP API, auth on business routes, or workers.
-- ADRs 0006–0010 are **Proposed** until confirmed.
+- No wagering HTTP use cases (routes exist and require auth; handlers return `501`) and no workers.
+- ADRs 0006–0011 are **Proposed** until confirmed.
 - STK-05 is documented and implemented: `pgx/v5` ([ADR 0003](docs/adr/0003-database-access-and-migrations.md)),
   `BIGINT` minor units ([ADR 0006](docs/adr/0006-money-representation.md), migration `000002`),
   unit of work ([ADR 0009](docs/adr/0009-sql-unit-of-work.md)).
@@ -161,11 +171,12 @@ locking. Still unfinished:
 - TST-04 is covered by `-tags=integration` tests in `internal/adapter/postgres`
   (`TestMigrationsUpAndDown`, `TestFinancialSchemaConstraints`, `TestLedgerAppendOnly`,
   `TestUnitOfWorkAtomicity`, `TestConcurrentBetsSerializePerWallet`). They need `POSTGRES_DSN`
-  only. Multi-instance runs and failure injection remain later
+  only. TST-07 needs Keycloak and `OIDC_ISSUER` (`TestOIDCVerifierRealIdP`, `TestAuthRealIdP`).
+  Multi-instance runs and failure injection remain later
   ([ADR 0005](docs/adr/0005-test-strategy-initial.md)).
-- Keycloak is provisioned and unused by the app. Health endpoints stay public.
+- Health endpoints stay public. `GET /wagering/transactions/{transactionId}` ownership is Phase 5.
 
 Interpretations: migrate Up on process start; rollback is operator-driven via CLI; default
 `go test ./...` never requires Docker; `"25"` / `"25.0"` are rejected as money input (no
 normalization); a BET is refunded at most once in its lifetime even if that refund is later
-rolled back.
+rolled back; HTTP `providerId` is always the token `azp`, never the untrusted body/path alone.

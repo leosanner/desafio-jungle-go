@@ -7,6 +7,10 @@ Default `go test ./...` does not need these containers ([ADR 0005](../adr/0005-t
 PostgreSQL and `POSTGRES_DSN` only. Keycloak and SQS are not required for that slice. See
 [`integration.md`](integration.md).
 
+**TST-07** (OIDC against the real IdP) needs Keycloak with realm `wagering` imported and
+`OIDC_ISSUER` (host value in [`.env.example`](../../.env.example)). PostgreSQL is optional for the
+auth tests except the side-effect count in `TestAuthRealIdP`.
+
 ## Prerequisites
 
 - Docker and Docker Compose
@@ -41,7 +45,7 @@ Published ports are defined in `docker-compose.yml` and `.env.example`. The usua
 | Service | Host port | What “ready” means |
 | --- | --- | --- |
 | PostgreSQL | `5432` | Accepts connections with `POSTGRES_DSN` (e.g. `pg_isready` or `psql "$POSTGRES_DSN" -c 'select 1'`) |
-| Keycloak | `8081` | Admin console at `http://localhost:8081` (app **does not** call Keycloak in Phase 3) |
+| Keycloak | `8081` | Realm `wagering` imported; `GET {OIDC_ISSUER}/.well-known/openid-configuration` returns 200; admin console at `http://localhost:8081` |
 | LocalStack | `4566` | SQS `GetQueueUrl` succeeds for `wager-transactions.fifo` and `wager-transactions-dlq.fifo` |
 | wagering (when started via Compose) | from `HTTP_ADDR` (often `8080`) | `GET /health/ready` returns `200` |
 
@@ -66,7 +70,8 @@ docker compose ps
      --queue-name wager-transactions-dlq.fifo
    ```
 
-4. Keycloak: open the host URL from Compose; unused by the Phase 3 process.
+4. Keycloak: `curl -sS "$OIDC_ISSUER/.well-known/openid-configuration"` (issuer from `.env.example`).
+   Token endpoint must accept `client_credentials` for `provider-a` / `wagering-internal`.
 5. App: [`docs/api/health.md`](../api/health.md) — live `200`, ready `200` only when Postgres and SQS pass.
 
 ## Integration tests
@@ -77,7 +82,8 @@ go test -tags=integration ./...
 
 Tests skip when required env is missing (`skip-if-no-env`). That skip is not a substitute for
 real-container CI. TST-04 (`./internal/adapter/postgres/...`) skips without `POSTGRES_DSN` and does
-not need Keycloak or LocalStack. See [integration.md](integration.md).
+not need Keycloak or LocalStack. TST-07 (`./internal/adapter/auth/...`, `./internal/adapter/http/...`)
+skips without `OIDC_ISSUER`. See [integration.md](integration.md).
 
 Multi-instance and failure-injection procedures are separate runbooks (not written yet).
 
