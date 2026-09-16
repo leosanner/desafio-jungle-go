@@ -18,6 +18,7 @@ type memStore struct {
 	byExt     map[string]string
 	ledger    []domain.WalletLedgerEntry
 	outbox    []OutboxRecord
+	inbox     map[string]InboxRecord
 }
 
 func newMemStore() *memStore {
@@ -27,6 +28,7 @@ func newMemStore() *memStore {
 		txs:       map[string]domain.WagerTransaction{},
 		byKey:     map[string]string{},
 		byExt:     map[string]string{},
+		inbox:     map[string]InboxRecord{},
 	}
 }
 
@@ -38,6 +40,7 @@ func (m *memStore) Within(ctx context.Context, fn func(context.Context, Reposito
 		Transactions: memTx{m},
 		Ledger:       memLedger{m},
 		Outbox:       memOutbox{m},
+		Inbox:        memInbox{m},
 	})
 }
 
@@ -202,6 +205,29 @@ type memOutbox struct{ s *memStore }
 
 func (r memOutbox) Insert(_ context.Context, rec OutboxRecord) error {
 	r.s.outbox = append(r.s.outbox, rec)
+	return nil
+}
+
+type memInbox struct{ s *memStore }
+
+func inboxKey(consumerName, messageID string) string {
+	return consumerName + "|" + messageID
+}
+
+func (r memInbox) Get(_ context.Context, consumerName, messageID string) (InboxRecord, error) {
+	rec, ok := r.s.inbox[inboxKey(consumerName, messageID)]
+	if !ok {
+		return InboxRecord{}, ErrNotFound
+	}
+	return rec, nil
+}
+
+func (r memInbox) Insert(_ context.Context, rec InboxRecord) error {
+	k := inboxKey(rec.ConsumerName, rec.MessageID)
+	if _, ok := r.s.inbox[k]; ok {
+		return ErrConflict
+	}
+	r.s.inbox[k] = rec
 	return nil
 }
 

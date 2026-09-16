@@ -8,7 +8,7 @@ import (
 	"github.com/leosanner/desafio-jungle-go/internal/domain"
 )
 
-// SubmitCommand is a provider-originated operation (HTTP or later SQS).
+// SubmitCommand is a provider-originated operation (HTTP or SQS).
 type SubmitCommand struct {
 	Actor               Actor
 	IdempotencyKey      string

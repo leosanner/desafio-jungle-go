@@ -16,6 +16,7 @@ func (stubUoW) Within(ctx context.Context, fn func(context.Context, app.Reposito
 		Transactions: stubTransactions{},
 		Ledger:       stubLedger{},
 		Outbox:       stubOutbox{},
+		Inbox:        stubInbox{},
 	})
 }
 
@@ -65,6 +66,13 @@ func (stubLedger) SumByWallet(context.Context, string, string) (domain.Money, in
 type stubOutbox struct{}
 
 func (stubOutbox) Insert(context.Context, app.OutboxRecord) error { return nil }
+
+type stubInbox struct{}
+
+func (stubInbox) Get(context.Context, string, string) (app.InboxRecord, error) {
+	return app.InboxRecord{}, app.ErrNotFound
+}
+func (stubInbox) Insert(context.Context, app.InboxRecord) error { return nil }
 
 func stubService() *app.Service {
 	return app.NewService(stubUoW{}, app.SystemClock{}, app.UUIDGenerator{}, app.NopMetrics{})

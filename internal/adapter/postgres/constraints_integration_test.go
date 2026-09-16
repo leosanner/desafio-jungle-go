@@ -187,6 +187,25 @@ func TestFinancialSchemaConstraints(t *testing.T) {
 					uniqueID(t, "hash-"), walletID, playerID, integrationNow)
 			},
 		},
+		{
+			name:       "duplicate inbox consumer_name message_id",
+			constraint: "inbox_messages_pkey",
+			sentinel:   app.ErrConflict,
+			run: func(t *testing.T) error {
+				hash := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+				msgID := uniqueID(t, "msg-")
+				if err := db.exec(t.Context(), `
+					INSERT INTO wagering.inbox_messages (consumer_name, message_id, payload_hash, received_at, completed_at)
+					VALUES ('wager-transactions', $1, $2, $3, $3)`,
+					msgID, hash, integrationNow); err != nil {
+					t.Fatalf("first inbox: %v", err)
+				}
+				return db.exec(t.Context(), `
+					INSERT INTO wagering.inbox_messages (consumer_name, message_id, payload_hash, received_at, completed_at)
+					VALUES ('wager-transactions', $1, $2, $3, $3)`,
+					msgID, hash, integrationNow)
+			},
+		},
 	}
 
 	for _, tc := range cases {

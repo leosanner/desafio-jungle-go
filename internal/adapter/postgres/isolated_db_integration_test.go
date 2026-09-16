@@ -388,3 +388,18 @@ func assertOutboxTable(t *testing.T, pool *Pool, want bool) {
 		t.Errorf("table wagering.outbox_events exists=%v, want %v", exists, want)
 	}
 }
+
+func assertInboxTable(t *testing.T, pool *Pool, want bool) {
+	t.Helper()
+	var exists bool
+	if err := pool.pool.QueryRow(t.Context(), `
+		SELECT EXISTS (
+			SELECT 1 FROM information_schema.tables
+			WHERE table_schema = 'wagering' AND table_name = 'inbox_messages'
+		)`).Scan(&exists); err != nil {
+		t.Fatalf("inbox table exists: %v", err)
+	}
+	if exists != want {
+		t.Errorf("table wagering.inbox_messages exists=%v, want %v", exists, want)
+	}
+}

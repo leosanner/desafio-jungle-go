@@ -9,6 +9,9 @@ import (
 	"github.com/leosanner/desafio-jungle-go/internal/domain"
 )
 
+// InboxConsumerWagerTransactions is the durable consumer_name for inbound SQS (ADR 0017).
+const InboxConsumerWagerTransactions = "wager-transactions"
+
 // Sentinel errors for persistence mapping. Adapters wrap driver errors with %w
 // so callers can use errors.Is without depending on pgx or database/sql.
 var (
@@ -21,6 +24,8 @@ var (
 	ErrOptimisticLock = errors.New("optimistic lock failure")
 	// ErrUnavailable is a retryable infrastructure failure (deadlock, serialization).
 	ErrUnavailable = errors.New("unavailable")
+	// ErrInboxHashMismatch means a redelivered envelope messageId has a different body hash.
+	ErrInboxHashMismatch = errors.New("inbox payload hash mismatch")
 )
 
 // Clock is injected so tests do not depend on wall time.
@@ -47,17 +52,18 @@ func (NopMetrics) IncReconciliationDivergence() {}
 type UnitOfWork interface {
 	// Within runs fn in a single SQL transaction. Commit if fn returns nil;
 	// rollback on error or panic. Repositories in Repositories MUST share that
-	// transaction so wallet, ledger, transaction and outbox writes commit atomically.
+	// transaction so wallet, ledger, transaction, outbox and inbox writes commit atomically.
 	Within(ctx context.Context, fn func(ctx context.Context, repos Repositories) error) error
 }
 
 // Repositories groups persistence ports that share the transaction opened by
-// UnitOfWork.Within. Inbox will join later without changing Within's signature.
+// UnitOfWork.Within. Inbox joins the same commit for SQS HandleInbound (ADR 0017).
 type Repositories struct {
 	Wallets      WalletRepository
 	Transactions TransactionRepository
 	Ledger       LedgerRepository
 	Outbox       OutboxRepository
+	Inbox        InboxRepository
 }
 
 // WalletRepository loads and persists Wallet aggregates.
@@ -124,6 +130,21 @@ type Envelope struct {
 	OccurredAt    time.Time       `json:"occurredAt"`
 	Version       int             `json:"version"`
 	Data          json.RawMessage `json:"data"`
+}
+
+// InboxRecord is a completed inbound message (ADR 0017).
+type InboxRecord struct {
+	ConsumerName string
+	MessageID    string
+	PayloadHash  string
+	ReceivedAt   time.Time
+	CompletedAt  time.Time
+}
+
+// InboxRepository persists completed inbound messages in the unit-of-work transaction.
+type InboxRepository interface {
+	Get(ctx context.Context, consumerName, messageID string) (InboxRecord, error) // ErrNotFound
+	Insert(ctx context.Context, rec InboxRecord) error                            // ErrConflict
 }
 
 // OutboxRepository inserts unpublished event rows in the unit-of-work transaction.
