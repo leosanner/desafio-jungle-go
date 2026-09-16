@@ -6,6 +6,7 @@ REGION="${AWS_DEFAULT_REGION:-us-east-1}"
 ACCOUNT="${AWS_ACCOUNT_ID:-000000000000}"
 DLQ_NAME="wager-transactions-dlq.fifo"
 MAIN_NAME="wager-transactions.fifo"
+EVENTS_NAME="wager-events.fifo"
 
 awslocal sqs create-queue \
 	--queue-name "${DLQ_NAME}" \
@@ -22,13 +23,20 @@ if [ -z "${DLQ_ARN}" ] || [ "${DLQ_ARN}" = "None" ]; then
 	DLQ_ARN="arn:aws:sqs:${REGION}:${ACCOUNT}:${DLQ_NAME}"
 fi
 
-REDRIVE="$(printf '{"deadLetterTargetArn":"%s","maxReceiveCount":"5"}' "${DLQ_ARN}")"
-
 awslocal sqs create-queue \
 	--queue-name "${MAIN_NAME}" \
 	--attributes FifoQueue=true,ContentBasedDeduplication=true >/dev/null
 
+# Outbound domain events (ADR 0015). Explicit MessageDeduplicationId = eventId;
+# content-based deduplication stays off (FIFO default).
+awslocal sqs create-queue \
+	--queue-name "${EVENTS_NAME}" \
+	--attributes FifoQueue=true >/dev/null
+
 MAIN_URL="$(awslocal sqs get-queue-url --queue-name "${MAIN_NAME}" --query QueueUrl --output text)"
+ATTR_FILE="$(mktemp)"
+printf '{"RedrivePolicy":"{\\"deadLetterTargetArn\\":\\"%s\\",\\"maxReceiveCount\\":\\"5\\"}"}\n' "${DLQ_ARN}" > "${ATTR_FILE}"
 awslocal sqs set-queue-attributes \
 	--queue-url "${MAIN_URL}" \
-	--attributes "RedrivePolicy=${REDRIVE}"
+	--attributes "file://${ATTR_FILE}"
+rm -f "${ATTR_FILE}"

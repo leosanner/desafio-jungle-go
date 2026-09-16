@@ -36,6 +36,11 @@ dependencies still respond.
 | `200` | Process is not shutting down, PostgreSQL ping succeeds, and the configured SQS queues are reachable |
 | `503` | Shutdown in progress, or any check failed |
 
+| Status | When |
+| --- | --- |
+| `200` | Process is not shutting down, PostgreSQL ping succeeds, and the configured SQS queues are reachable |
+| `503` | Shutdown in progress, or any check failed |
+
 Success (dependency details are omitted; HTTP 200 is the signal):
 
 ```json
@@ -67,8 +72,9 @@ Unavailable because shutdown started:
 
 Clients must use the HTTP status (`200` vs `503`) as the primary signal; the body is diagnostic.
 
-SQS readiness means the process can reach the broker and the queues named by `SQS_WAGER_QUEUE_NAME`
-and `SQS_WAGER_DLQ_NAME` exist. It does **not** mean a consumer is running (Phase 1 has none).
+SQS readiness means the process can reach the broker and the queues named by `SQS_WAGER_QUEUE_NAME`,
+`SQS_WAGER_DLQ_NAME` and `SQS_EVENTS_QUEUE_NAME` exist. It does **not** mean an inbound consumer is
+running (Phase 7). The outbox publisher (Phase 6) publishes to the events queue.
 
 ## Authentication
 

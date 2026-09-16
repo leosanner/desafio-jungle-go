@@ -18,8 +18,13 @@ func setValidEnv(t *testing.T) {
 	t.Setenv("AWS_ENDPOINT_URL", "http://localhost:4566")
 	t.Setenv("SQS_WAGER_QUEUE_NAME", "wager-transactions.fifo")
 	t.Setenv("SQS_WAGER_DLQ_NAME", "wager-transactions-dlq.fifo")
+	t.Setenv("SQS_EVENTS_QUEUE_NAME", "wager-events.fifo")
 	t.Setenv("FX_START_TIMEOUT", "15s")
 	t.Setenv("FX_STOP_TIMEOUT", "30s")
+	t.Setenv("OUTBOX_POLL_INTERVAL", "250ms")
+	t.Setenv("OUTBOX_BATCH_SIZE", "10")
+	t.Setenv("OUTBOX_LEASE", "30s")
+	t.Setenv("OUTBOX_BACKOFF_MAX", "1m")
 	t.Setenv("OIDC_ISSUER", "http://localhost:8081/realms/wagering")
 	t.Setenv("OIDC_AUDIENCE", "wagering-api")
 	t.Setenv("OIDC_INTERNAL_CLIENT", "wagering-internal")
@@ -52,6 +57,21 @@ func TestLoadSuccess(t *testing.T) {
 	}
 	if cfg.OIDCInternalClient != "wagering-internal" {
 		t.Errorf("OIDCInternalClient = %q", cfg.OIDCInternalClient)
+	}
+	if cfg.SQSEventsQueueName != "wager-events.fifo" {
+		t.Errorf("SQSEventsQueueName = %q", cfg.SQSEventsQueueName)
+	}
+	if cfg.OutboxPollInterval != 250*time.Millisecond {
+		t.Errorf("OutboxPollInterval = %s", cfg.OutboxPollInterval)
+	}
+	if cfg.OutboxBatchSize != 10 {
+		t.Errorf("OutboxBatchSize = %d", cfg.OutboxBatchSize)
+	}
+	if cfg.OutboxLease != 30*time.Second {
+		t.Errorf("OutboxLease = %s", cfg.OutboxLease)
+	}
+	if cfg.OutboxBackoffMax != time.Minute {
+		t.Errorf("OutboxBackoffMax = %s", cfg.OutboxBackoffMax)
 	}
 }
 
@@ -117,7 +137,12 @@ func TestLoadMissingRequired(t *testing.T) {
 		"AWS_SECRET_ACCESS_KEY",
 		"SQS_WAGER_QUEUE_NAME",
 		"SQS_WAGER_DLQ_NAME",
+		"SQS_EVENTS_QUEUE_NAME",
 		"FX_START_TIMEOUT",
+		"OUTBOX_POLL_INTERVAL",
+		"OUTBOX_BATCH_SIZE",
+		"OUTBOX_LEASE",
+		"OUTBOX_BACKOFF_MAX",
 		"FX_STOP_TIMEOUT",
 		"OIDC_ISSUER",
 		"OIDC_AUDIENCE",
@@ -168,6 +193,33 @@ func TestLoadBadDuration(t *testing.T) {
 		_, err := Load()
 		if !errors.Is(err, ErrInvalidDuration) {
 			t.Fatalf("err = %v, want %v", err, ErrInvalidDuration)
+		}
+	})
+	t.Run("outbox lease", func(t *testing.T) {
+		setValidEnv(t)
+		t.Setenv("OUTBOX_LEASE", "0s")
+		_, err := Load()
+		if !errors.Is(err, ErrInvalidDuration) {
+			t.Fatalf("err = %v, want %v", err, ErrInvalidDuration)
+		}
+	})
+}
+
+func TestLoadBadBatchSize(t *testing.T) {
+	t.Run("not-int", func(t *testing.T) {
+		setValidEnv(t)
+		t.Setenv("OUTBOX_BATCH_SIZE", "ten")
+		_, err := Load()
+		if !errors.Is(err, ErrInvalidInt) {
+			t.Fatalf("err = %v, want %v", err, ErrInvalidInt)
+		}
+	})
+	t.Run("non-positive", func(t *testing.T) {
+		setValidEnv(t)
+		t.Setenv("OUTBOX_BATCH_SIZE", "0")
+		_, err := Load()
+		if !errors.Is(err, ErrInvalidInt) {
+			t.Fatalf("err = %v, want %v", err, ErrInvalidInt)
 		}
 	})
 }

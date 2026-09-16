@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -18,6 +19,7 @@ var (
 	ErrMissingEnv      = errors.New("missing required environment variable")
 	ErrInvalidLogLevel = errors.New("invalid LOG_LEVEL")
 	ErrInvalidDuration = errors.New("invalid duration")
+	ErrInvalidInt      = errors.New("invalid integer")
 )
 
 // Config is process configuration loaded from the environment.
@@ -32,8 +34,13 @@ type Config struct {
 	AWSEndpointURL     string
 	SQSWagerQueueName  string
 	SQSWagerDLQName    string
+	SQSEventsQueueName string
 	FXStartTimeout     time.Duration
 	FXStopTimeout      time.Duration
+	OutboxPollInterval time.Duration
+	OutboxBatchSize    int
+	OutboxLease        time.Duration
+	OutboxBackoffMax   time.Duration
 	OIDCIssuer         string
 	OIDCAudience       string
 	OIDCJWKSURL        string
@@ -50,6 +57,22 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	pollInterval, err := parseDuration("OUTBOX_POLL_INTERVAL")
+	if err != nil {
+		return Config{}, err
+	}
+	lease, err := parseDuration("OUTBOX_LEASE")
+	if err != nil {
+		return Config{}, err
+	}
+	backoffMax, err := parseDuration("OUTBOX_BACKOFF_MAX")
+	if err != nil {
+		return Config{}, err
+	}
+	batchSize, err := parsePositiveInt("OUTBOX_BATCH_SIZE")
+	if err != nil {
+		return Config{}, err
+	}
 
 	cfg := Config{
 		LogLevel:           os.Getenv("LOG_LEVEL"),
@@ -62,8 +85,13 @@ func Load() (Config, error) {
 		AWSEndpointURL:     strings.TrimSpace(os.Getenv("AWS_ENDPOINT_URL")),
 		SQSWagerQueueName:  os.Getenv("SQS_WAGER_QUEUE_NAME"),
 		SQSWagerDLQName:    os.Getenv("SQS_WAGER_DLQ_NAME"),
+		SQSEventsQueueName: os.Getenv("SQS_EVENTS_QUEUE_NAME"),
 		FXStartTimeout:     startTimeout,
 		FXStopTimeout:      stopTimeout,
+		OutboxPollInterval: pollInterval,
+		OutboxBatchSize:    batchSize,
+		OutboxLease:        lease,
+		OutboxBackoffMax:   backoffMax,
 		OIDCIssuer:         strings.TrimSpace(os.Getenv("OIDC_ISSUER")),
 		OIDCAudience:       strings.TrimSpace(os.Getenv("OIDC_AUDIENCE")),
 		OIDCJWKSURL:        strings.TrimSpace(os.Getenv("OIDC_JWKS_URL")),
@@ -109,6 +137,9 @@ func (c *Config) Validate() error {
 	if err := require("SQS_WAGER_DLQ_NAME", c.SQSWagerDLQName); err != nil {
 		return err
 	}
+	if err := require("SQS_EVENTS_QUEUE_NAME", c.SQSEventsQueueName); err != nil {
+		return err
+	}
 	c.OIDCIssuer = strings.TrimRight(c.OIDCIssuer, "/")
 	if err := require("OIDC_ISSUER", c.OIDCIssuer); err != nil {
 		return err
@@ -124,6 +155,18 @@ func (c *Config) Validate() error {
 	}
 	if c.FXStopTimeout <= 0 {
 		return fmt.Errorf("%w: FX_STOP_TIMEOUT must be positive", ErrInvalidDuration)
+	}
+	if c.OutboxPollInterval <= 0 {
+		return fmt.Errorf("%w: OUTBOX_POLL_INTERVAL must be positive", ErrInvalidDuration)
+	}
+	if c.OutboxLease <= 0 {
+		return fmt.Errorf("%w: OUTBOX_LEASE must be positive", ErrInvalidDuration)
+	}
+	if c.OutboxBackoffMax <= 0 {
+		return fmt.Errorf("%w: OUTBOX_BACKOFF_MAX must be positive", ErrInvalidDuration)
+	}
+	if c.OutboxBatchSize <= 0 {
+		return fmt.Errorf("%w: OUTBOX_BATCH_SIZE must be positive", ErrInvalidInt)
 	}
 	return nil
 }
@@ -177,4 +220,19 @@ func parseDuration(key string) (time.Duration, error) {
 		return 0, fmt.Errorf("%w: %s: %w", ErrInvalidDuration, key, err)
 	}
 	return d, nil
+}
+
+func parsePositiveInt(key string) (int, error) {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return 0, fmt.Errorf("%w: %s", ErrMissingEnv, key)
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, fmt.Errorf("%w: %s: %w", ErrInvalidInt, key, err)
+	}
+	if n <= 0 {
+		return 0, fmt.Errorf("%w: %s must be positive", ErrInvalidInt, key)
+	}
+	return n, nil
 }
