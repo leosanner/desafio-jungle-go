@@ -3,8 +3,9 @@
 Go + Uber Fx service that processes financial operations from game providers via HTTP and SQS, backed by
 PostgreSQL, Keycloak and LocalStack. Full challenge statement (in Portuguese) in [`init.md`](init.md).
 
-> Phase 8: process skeleton, domain, financial persistence, OIDC, HTTP use cases, concurrent
-> outbox publisher, SQS inbound consumer (inbox + DLQ), and the **pending-reference worker**.
+> Phase 9: process skeleton, domain, financial persistence, OIDC, HTTP use cases, concurrent
+> outbox publisher, SQS inbound consumer (inbox + DLQ), pending-reference worker, and
+> **multi-instance** tests plus failure runbooks.
 > See [`docs/roadmap.md`](docs/roadmap.md).
 
 ## Prerequisites
@@ -190,7 +191,8 @@ That skip is not a substitute for CI with real containers.
 (`AWS_ENDPOINT_URL` and AWS dummy keys) for publish tests; claim/SKIP LOCKED tests need Postgres
 only. **Phase 7 inbound** (`TestInbound*` in `internal/adapter/postgres`) needs `POSTGRES_DSN` and
 LocalStack. **Phase 8 pending** (`TestPending*` in `internal/adapter/postgres`) needs `POSTGRES_DSN`
-only. **TST-07** (auth against the real IdP) needs Keycloak and `OIDC_ISSUER`:
+only. **Phase 9 multi-instance** (`TestInstances*` in `internal/composition`) needs Postgres,
+Keycloak and LocalStack (`POSTGRES_DSN`, `OIDC_ISSUER`, `AWS_ENDPOINT_URL`). **TST-07** (auth against the real IdP) needs Keycloak and `OIDC_ISSUER`:
 
 ```sh
 docker compose up -d postgres keycloak localstack
@@ -200,8 +202,10 @@ go test -tags=integration ./...
 
 How to run TST-04: [`docs/runbooks/integration.md`](docs/runbooks/integration.md). Starting
 dependencies: [`docs/runbooks/test-dependencies.md`](docs/runbooks/test-dependencies.md). Strategy:
-[ADR 0005](docs/adr/0005-test-strategy-initial.md). Multi-instance and failure simulation runbooks
-are placeholders until later phases.
+[ADR 0005](docs/adr/0005-test-strategy-initial.md). Three processes:
+[`docs/runbooks/multiple-instances.md`](docs/runbooks/multiple-instances.md)
+([ADR 0020](docs/adr/0020-multi-instance-and-failure-injection.md)). Crashes and dependency loss:
+[`docs/runbooks/failure-simulation.md`](docs/runbooks/failure-simulation.md).
 
 ## Documentation
 

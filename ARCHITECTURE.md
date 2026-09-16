@@ -5,11 +5,11 @@
 
 ## Overview
 
-Phase 8 of a Go + Uber Fx wagering service: hexagonal layout, stdlib HTTP, PostgreSQL via `pgx`,
+Phase 9 of a Go + Uber Fx wagering service: hexagonal layout, stdlib HTTP, PostgreSQL via `pgx`,
 golang-migrate, LocalStack SQS queues, a **pure domain model**, **financial persistence**, **OIDC
 authentication**, **HTTP use cases**, a **concurrent outbox publisher**, an **SQS inbound
-consumer** with a transactional inbox, and a **pending-reference worker** that resumes `PENDING` /
-`PENDING_REFERENCE`.
+consumer** with a transactional inbox, a **pending-reference worker**, and **multi-instance**
+verification (three OS processes plus failure runbooks).
 
 - Module: `github.com/leosanner/desafio-jungle-go` ([ADR 0001](docs/adr/0001-package-layout-and-layer-boundaries.md))
 - Go 1.25, `net/http` ServeMux, `log/slog` JSON ([ADR 0002](docs/adr/0002-go-version-and-http-router.md))
@@ -80,7 +80,8 @@ then `UPDATE ... WHERE id = $1 AND version = $2`. Zero rows on that UPDATE is an
 failure, not a silent retry. No global mutex, no session advisory lock on a constant, no table
 lock, no in-memory lock map. Independent wallets proceed in parallel; N instances share PostgreSQL
 row locks. `CHECK (balance_minor >= 0)` is a last line of defense. Optimistic-only version retries
-are rejected as the primary strategy.
+are rejected as the primary strategy. Three independent `cmd/wagering` processes prove CON-02
+([ADR 0020](docs/adr/0020-multi-instance-and-failure-injection.md)).
 
 ## Idempotency
 
@@ -150,7 +151,8 @@ envelope to FIFO `wager-events.fifo` (`SQS_EVENTS_QUEUE_NAME`). `MessageGroupId`
 **Proposed:** [ADR 0016](docs/adr/0016-outbox-claim-and-backoff.md). Separate worker claims due rows
 with `SELECT … FOR UPDATE SKIP LOCKED`, leases via `next_attempt_at`, publishes outside the lock,
 then sets `published_at`. Exponential backoff on send failure. `eventId` is never rewritten.
-Injectable `AfterPublish` hook is tests-only (publish-before-ack).
+Injectable `AfterPublish` hook is tests-only (publish-before-ack). N publishers share `SKIP LOCKED`;
+three OS processes are covered by [ADR 0020](docs/adr/0020-multi-instance-and-failure-injection.md).
 
 ## Authentication and authorization
 
@@ -198,9 +200,9 @@ Reconciliation divergences are logged (`walletId`, entry count, no full payload)
 
 ## Limitations, interpretations and unfinished work
 
-Phase 8 adds the pending-reference worker. Still unfinished:
+Phase 9 adds three-process tests and failure runbooks. Still unfinished:
 
-- ADRs 0006–0019 are **Proposed** until confirmed.
+- ADRs 0006–0020 are **Proposed** until confirmed.
 - STK-05 is documented and implemented: `pgx/v5` ([ADR 0003](docs/adr/0003-database-access-and-migrations.md)),
   `BIGINT` minor units ([ADR 0006](docs/adr/0006-money-representation.md), migration `000002`),
   unit of work ([ADR 0009](docs/adr/0009-sql-unit-of-work.md)), outbox insert ([ADR 0014](docs/adr/0014-outbox-persistence.md),
@@ -214,9 +216,10 @@ Phase 8 adds the pending-reference worker. Still unfinished:
   TST-07 needs Keycloak and `OIDC_ISSUER`.
   Phase 8 pending: `TestPendingRefundResolvesWhenBetArrives`, `TestPendingRefundExpiresReferenceNotFound`,
   `TestPendingCommittedPendingResumed` (`POSTGRES_DSN` only).
-  Multi-instance runs remain Phase 9
-  ([ADR 0005](docs/adr/0005-test-strategy-initial.md)).
+  Phase 9 instances: `TestInstances*` (`POSTGRES_DSN` + Keycloak + LocalStack,
+  [ADR 0020](docs/adr/0020-multi-instance-and-failure-injection.md)).
 - Health endpoints stay public.
+- Observability (correlation fields, metrics catalog, tracing) is Phase 10.
 
 Interpretations: migrate Up on process start; rollback is operator-driven via CLI; default
 `go test ./...` never requires Docker; `"25"` / `"25.0"` are rejected as money input (no

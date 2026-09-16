@@ -83,15 +83,16 @@ migrate -path migrations -database "$POSTGRES_DSN" down 1
   `TestOutboxRecoverPublishBeforeAck`) need `POSTGRES_DSN` and LocalStack (`AWS_ENDPOINT_URL`).
   Claim/SKIP LOCKED tests need `POSTGRES_DSN` only. Phase 7 inbound consume tests (`TestInbound*`)
   need `POSTGRES_DSN` and LocalStack (`AWS_ENDPOINT_URL`). Phase 8 pending-reference tests
-  (`TestPending*`) need `POSTGRES_DSN` only. TST-07 needs `OIDC_ISSUER` and a running
-  Keycloak with the imported `wagering` realm.
+  (`TestPending*`) need `POSTGRES_DSN` only. Phase 9 multi-instance tests (`TestInstances*`) need
+  `POSTGRES_DSN`, `OIDC_ISSUER` and LocalStack (`AWS_ENDPOINT_URL`). TST-07 needs `OIDC_ISSUER` and a
+  running Keycloak with the imported `wagering` realm.
 
 ## Current state
 
-Phase 8 pending-reference worker is in place: transactional inbox + SQS consume remain from Phase 7;
-`PENDING` / `PENDING_REFERENCE` rows are claimed with `SKIP LOCKED`, retried with persisted backoff,
-and exhausted to `REFERENCE_NOT_FOUND`. HTTP use cases, domain, persistence, OIDC and the outbox
-publisher remain. **No multi-instance runbook yet.**
+Phase 9 multi-instance proof is in place: tagged tests spawn three `cmd/wagering` processes
+(`TestInstances*`); runbooks cover replicas and failure injection. Transactional inbox + SQS
+consume remain from Phase 7; `PENDING` / `PENDING_REFERENCE` rows are claimed with `SKIP LOCKED`.
+HTTP use cases, domain, persistence, OIDC and the outbox publisher remain. **No metrics catalog yet.**
 Decisions: [ADR 0001](docs/adr/0001-package-layout-and-layer-boundaries.md)–[0005](docs/adr/0005-test-strategy-initial.md)
-(accepted); [ADR 0006](docs/adr/0006-money-representation.md)–[0019](docs/adr/0019-pending-reference-resume.md)
-(proposed). Next: Phase 9 multiple instances.
+(accepted); [ADR 0006](docs/adr/0006-money-representation.md)–[0020](docs/adr/0020-multi-instance-and-failure-injection.md)
+(proposed). Next: Phase 10 observability.

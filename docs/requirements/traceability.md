@@ -12,13 +12,13 @@ the `spec-audit` skill or when completing a deliverable.
 | ELIM-01 | Effective authentication on every business endpoint | ✅ | Middleware on all registered business routes (`internal/adapter/http/server.go`); missing/invalid Bearer → 401 (`TestBusinessRouteMissingToken`, `TestBusinessRouteInvalidToken`, `TestAuthRealIdP`). Health stays public |
 | ELIM-02 | No unauthorized access to operations or transactions | ✅ | Path isolation `TestProviderIsolationOnPath` / `TestAuthRealIdP`; wallets `TestWalletRestrictedToInternal`; body `providerId` `TestPostWageringRejectsInternalAndBodyMismatch`; generic 403 `TestForbiddenBodyDoesNotLeak`; `GET /wagering/transactions/{id}` other provider → 404 (`TestGetTransactionHidesOtherProvider`, `TestHTTPPhase5UseCases`) |
 | ELIM-03 | No floating-point money arithmetic | ✅ | Domain: `internal/domain` (`TestDomainSourcesHaveNoFloatMoney`, `TestParseMoneyRejectsInvalid`, `TestMoneyJSON`). Persistence: `migrations/000002_financial_schema.up.sql` (`BIGINT` `*_minor`); `internal/adapter/postgres/repo.go` (`moneyFromMinorScan` → `int64`). HTTP uses `domain.Money` JSON strings |
-| ELIM-04 | No negative balance under concurrency | 🚧 | Schema `CHECK (balance_minor >= 0)`; `TestConcurrentBetsSerializePerWallet`; `TestHTTPTwoBetsOnHundred`. Not yet proven with ≥3 processes |
-| ELIM-05 | No duplicated movement | 🚧 | Unique `(provider_id, idempotency_key)` / `(provider_id, external_transaction_id)`; `TestSubmitReplayAndConflicts`; `TestHTTPConcurrentSameBet` (50× same bet → one debit). Multi-instance still Phase 9 |
+| ELIM-04 | No negative balance under concurrency | ✅ | Schema `CHECK (balance_minor >= 0)`; `TestConcurrentBetsSerializePerWallet`; `TestHTTPTwoBetsOnHundred`; `TestInstancesThreeProcessesTwoBetsOnHundred` (3 OS processes) |
+| ELIM-05 | No duplicated movement | ✅ | Unique `(provider_id, idempotency_key)` / `(provider_id, external_transaction_id)`; `TestSubmitReplayAndConflicts`; `TestHTTPConcurrentSameBet`; `TestInstancesConcurrentSameBet` (50× same bet across 3 processes → one debit) |
 | ELIM-06 | Persistent idempotency (not memory-only) | ✅ | `payload_hash` column; `domain.HashCanonicalPayload`; `Submit` persists then replays (`TestSubmitReplayAndConflicts`, `TestHTTPPhase5UseCases`) |
-| ELIM-07 | Works correctly with multiple instances | — | |
+| ELIM-07 | Works correctly with multiple instances | ✅ | Three `cmd/wagering` processes (`TestInstances*`, [ADR 0020](../adr/0020-multi-instance-and-failure-injection.md)); per-wallet `FOR UPDATE` ([ADR 0010](../adr/0010-per-wallet-concurrency.md)); `SKIP LOCKED` outbox/inbox/pending |
 | ELIM-08 | No publishing before commit | ✅ | Outbox insert in the same `Within` ([ADR 0014](../adr/0014-outbox-persistence.md)); publisher claims only committed rows (`TestOutboxRelayPublishesOpeningEvents`, [ADR 0016](../adr/0016-outbox-claim-and-backoff.md)) |
 | ELIM-09 | Auditable ledger | ✅ | `migrations/000002_financial_schema.up.sql`; `TestLedgerAppendOnly`; HTTP `GET .../ledger` (`TestHTTPPhase5UseCases`) |
-| ELIM-10 | Real PostgreSQL, SQS and IdP in tests (no full mocking) | 🚧 | TST-04 uses real PostgreSQL (`-tags=integration`, skip-if-no-`POSTGRES_DSN`). TST-07 uses real Keycloak (`OIDC_ISSUER`). Phase 6 outbox publish tests use real LocalStack SQS. Phase 7 inbound consume tests use real LocalStack SQS. Multi-instance still Phase 9 |
+| ELIM-10 | Real PostgreSQL, SQS and IdP in tests (no full mocking) | ✅ | TST-04 real PostgreSQL; TST-07 real Keycloak; Phase 6/7 LocalStack SQS; `TestInstances*` uses Postgres + Keycloak + LocalStack together ([ADR 0005](../adr/0005-test-strategy-initial.md), [ADR 0020](../adr/0020-multi-instance-and-failure-injection.md)). Skip-if-no-env is not a substitute for CI |
 
 ## Stack and composition (§4)
 
@@ -57,8 +57,8 @@ the `spec-audit` skill or when completing a deliverable.
 | GAR-03 | Invariants in the database, independent of local locks and FIFO dedup | ✅ | `migrations/000002_financial_schema.up.sql`; `TestFinancialSchemaConstraints` (raw SQL, no app locks); `TestLedgerAppendOnly` | |
 | GAR-04 | Publishing only after commit | ✅ | Outbox rows inserted unpublished in the same `Within`; `OutboxRelay` claims after commit ([ADR 0016](../adr/0016-outbox-claim-and-backoff.md); `TestOutboxRelayPublishesOpeningEvents`) | |
 | GAR-05 | Append-only ledger | ✅ | `000002` trigger `wallet_ledger_entries_append_only`; `REVOKE UPDATE, DELETE, TRUNCATE`; `TestLedgerAppendOnly`; `internal/adapter/postgres/ledger.go` (insert/list only) | HTTP ledger read later |
-| GAR-06 | Independent wallets in parallel; no global lock | 🚧 | [ADR 0010](../adr/0010-per-wallet-concurrency.md) (row lock per wallet; no global mutex); `GetByIDForUpdate` | Parallel independent wallets not proven | |
-| GAR-07 | No lost updates | 🚧 | [ADR 0010](../adr/0010-per-wallet-concurrency.md); `GetByIDForUpdate`; version-conditioned `UPDATE`; `TestConcurrentBetsSerializePerWallet` (one process, two txs) | ≥3 processes still Phase 9 |
+| GAR-06 | Independent wallets in parallel; no global lock | ✅ | [ADR 0010](../adr/0010-per-wallet-concurrency.md) (row lock per wallet; no global mutex); `GetByIDForUpdate`; `TestHTTPDistinctWalletsParallel`; `TestInstancesDistinctWalletsParallel` | |
+| GAR-07 | No lost updates | ✅ | [ADR 0010](../adr/0010-per-wallet-concurrency.md); `GetByIDForUpdate`; version-conditioned `UPDATE`; `TestConcurrentBetsSerializePerWallet`; `TestInstancesThreeProcessesTwoBetsOnHundred` | |
 | GAR-08 | Uniqueness, non-negativity and immutability enforced by the schema | ✅ | `000002`; `TestFinancialSchemaConstraints`; `TestLedgerAppendOnly`; `TestDuplicateWalletInsertConflict` | |
 
 ## Domain model (§6)
@@ -82,7 +82,7 @@ the `spec-audit` skill or when completing a deliverable.
 | WAL-03 | Debit keeps balance ≥ 0; currency matches | ✅ | `TestWalletDebitInsufficientFunds`; `TestWalletCurrencyMismatch` | | |
 | WAL-04 | Financial change with ledger entry in the same commit | ✅ | Domain `Debit`/`Credit`/`Apply`; `UnitOfWork.Within`; `TestUnitOfWorkAtomicity`; [ADR 0009](../adr/0009-sql-unit-of-work.md) | |
 | WAL-05 | Initial version 1, increments only on balance change | ✅ | `TestOpenWallet*`; `TestWalletDebitCreditAndVersion`; `TestApplyBetWinLoss` (LOSS) | | |
-| WAL-06 | Concurrency strategy documented | ✅ | [ADR 0010](../adr/0010-per-wallet-concurrency.md) (Proposed); `GetByIDForUpdate` + version-conditioned `UPDATE` in `internal/adapter/postgres/wallet.go` | Not proven with N processes (CON-01/02) | |
+| WAL-06 | Concurrency strategy documented | ✅ | [ADR 0010](../adr/0010-per-wallet-concurrency.md) (Proposed); `GetByIDForUpdate` + version-conditioned `UPDATE` in `internal/adapter/postgres/wallet.go`; N processes in [ADR 0020](../adr/0020-multi-instance-and-failure-injection.md) | | |
 | WTX-01 | External transaction fields persisted (ids, provider, key, hash, round, game, reference, result) | ✅ | `internal/domain/transaction.go`; `migrations/000002_financial_schema.up.sql`; `internal/adapter/postgres/transaction.go` (insert/scan of ids, provider, key, hash, round, game, reference, result) | | |
 | WTX-02 | Validated state machine; immutable terminal states; documented | ✅ | [ADR 0007](../adr/0007-wager-transaction-state-machine.md); `TestStateMachineTransitions`; `TestRejectedIsTerminal` | | |
 | WTX-03 | Replay returns persisted result without re-applying | ✅ | Rehydration does not re-apply; `ResultBalance` snapshot; `TestSubmitReplayAndConflicts`; `TestHTTPPhase5UseCases` | |
@@ -118,11 +118,11 @@ the `spec-audit` skill or when completing a deliverable.
 
 | ID | Requirement | Status | Evidence | Notes |
 | --- | --- | --- | --- | --- |
-| CON-01 | Per-wallet coordination with a justified strategy | 🚧 | [ADR 0010](../adr/0010-per-wallet-concurrency.md); `GetByIDForUpdate`; `TestConcurrentBetsSerializePerWallet` | Not proven with 3 processes (CON-02) |
-| CON-02 | Demonstrated with ≥3 independent processes | — | | |
-| CON-03 | 100.00 + two 80.00 bets → 1 processed, 1 rejected, balance 20.00, 1 debit | ✅ | `TestConcurrentBetsSerializePerWallet`; `TestHTTPTwoBetsOnHundred` | ≥3 instances Phase 9 |
+| CON-01 | Per-wallet coordination with a justified strategy | ✅ | [ADR 0010](../adr/0010-per-wallet-concurrency.md); `GetByIDForUpdate`; `TestConcurrentBetsSerializePerWallet`; `TestInstancesThreeProcessesTwoBetsOnHundred` | |
+| CON-02 | Demonstrated with ≥3 independent processes | ✅ | `TestInstances*` (`exec.Command` of `cmd/wagering`, [ADR 0020](../adr/0020-multi-instance-and-failure-injection.md)); [multiple-instances.md](../runbooks/multiple-instances.md) | |
+| CON-03 | 100.00 + two 80.00 bets → 1 processed, 1 rejected, balance 20.00, 1 debit | ✅ | `TestConcurrentBetsSerializePerWallet`; `TestHTTPTwoBetsOnHundred`; `TestInstancesThreeProcessesTwoBetsOnHundred` | |
 | CON-04 | Resends don't change the outcome | ✅ | `TestSubmitReplayAndConflicts`; `TestHTTPPhase5UseCases`; `TestHTTPConcurrentSameBet` | |
-| CON-05 | Different wallets processed in parallel | ✅ | `TestHTTPDistinctWalletsParallel` | | |
+| CON-05 | Different wallets processed in parallel | ✅ | `TestHTTPDistinctWalletsParallel`; `TestInstancesDistinctWalletsParallel` | |
 
 ## HTTP (§9)
 
@@ -187,15 +187,15 @@ the `spec-audit` skill or when completing a deliverable.
 | TST-05 | Integration: inbox, redelivery, concurrent outbox, retry, DLQ, recovery | ✅ | Concurrent outbox: `TestOutboxTwoPublishersContend`, `TestOutboxRecoverPublishBeforeAck`. Inbox/redelivery/DLQ: `TestHandleInboundInboxAtomicWithDomain`, `TestInboundRecoverCommitBeforeDelete`, `TestInboundInvalidMessageGoesToDLQ`. PENDING restart: `TestPendingCommittedPendingResumed` |
 | TST-06 | Integration: Fx composition, start/stop and resource release | ✅ | `TestValidateApp`; `TestInvalidConfigFailsStart`; `TestAppStartStop` (`-tags=integration`); `TestOutboxWorkerStartStopClosesDone` | |
 | TST-07 | Auth: real IdP; missing/invalid/expired; isolation; internal restriction; no effects | ✅ | Unit: `internal/adapter/auth/verifier_test.go`, `internal/adapter/http/auth_test.go` (expired, HMAC, isolation, no handler on 401). Integration: `TestOIDCVerifierRealIdP`, `TestAuthRealIdP` (`-tags=integration`, `OIDC_ISSUER`). Expired covered in unit tests (real Keycloak tokens are not expired) | |
-| TST-08 | Same bet 50× in parallel → one debit | ✅ | `TestHTTPConcurrentSameBet` (`-tags=integration`, `POSTGRES_DSN`) | |
-| TST-09 | Two 80.00 bets on 100.00 | ✅ | `TestConcurrentBetsSerializePerWallet`; `TestHTTPTwoBetsOnHundred` | ≥3 instances Phase 9 |
-| TST-10 | Distinct wallets in parallel | ✅ | `TestHTTPDistinctWalletsParallel` | |
-| TST-11 | Scenarios with ≥3 instances | — | | |
+| TST-08 | Same bet 50× in parallel → one debit | ✅ | `TestHTTPConcurrentSameBet` (`-tags=integration`, `POSTGRES_DSN`); `TestInstancesConcurrentSameBet` (3 processes) | |
+| TST-09 | Two 80.00 bets on 100.00 | ✅ | `TestConcurrentBetsSerializePerWallet`; `TestHTTPTwoBetsOnHundred`; `TestInstancesThreeProcessesTwoBetsOnHundred` | |
+| TST-10 | Distinct wallets in parallel | ✅ | `TestHTTPDistinctWalletsParallel`; `TestInstancesDistinctWalletsParallel` | |
+| TST-11 | Scenarios with ≥3 instances | ✅ | `TestInstancesThreeProcessesTwoBetsOnHundred`, `TestInstancesConcurrentSameBet`, `TestInstancesDistinctWalletsParallel`, `TestInstancesHTTPxSQSSameKeyOneDebit`, `TestInstancesKillPendingResumed` (`-tags=integration`; Postgres + Keycloak + LocalStack) | |
 | TST-12 | Consumer interrupted after commit and before delete | ✅ | `TestInboundRecoverCommitBeforeDelete` (`Consumer.SetAfterCommit`) | |
 | TST-13 | Two publishers contending for the outbox | ✅ | `TestOutboxTwoPublishersContend`; `TestOutboxClaimSkipLocked` | |
 | TST-14 | Reversal before its reference → resolution or expiry | ✅ | `TestResumeDueResolvesWhenReferenceArrives`; `TestResumeDueExpiresReferenceNotFound`; `TestPendingRefundResolvesWhenBetArrives`; `TestPendingRefundExpiresReferenceNotFound` (`-tags=integration`, `POSTGRES_DSN`) |
-| TST-15 | Restart preserves idempotency, pending work and consistency; `PENDING` resumed | ✅ | `TestResumeDueCommittedPending`; `TestPendingCommittedPendingResumed` (insert `PENDING`, new `Service` resumes, same-key replay, ledger/balance) |
-| TST-16 | Balance vs ledger at the end; scenarios crossing HTTP and SQS | ✅ | `TestReconcileWalletConsistent`; HTTP reconciliation in `TestHTTPPhase5UseCases`; `TestInboundHTTPxSQSSameKeyOneDebit`; `TestHandleInboundHTTPThenSQSSameKey` | |
+| TST-15 | Restart preserves idempotency, pending work and consistency; `PENDING` resumed | ✅ | `TestResumeDueCommittedPending`; `TestPendingCommittedPendingResumed` (insert `PENDING`, new `Service` resumes, same-key replay, ledger/balance); `TestInstancesKillPendingResumed` (`SIGKILL` after `PENDING_REFERENCE`) |
+| TST-16 | Balance vs ledger at the end; scenarios crossing HTTP and SQS | ✅ | `TestReconcileWalletConsistent`; HTTP reconciliation in `TestHTTPPhase5UseCases`; `TestInboundHTTPxSQSSameKeyOneDebit`; `TestHandleInboundHTTPThenSQSSameKey`; `TestInstancesHTTPxSQSSameKeyOneDebit` | |
 | TST-17 | Duplicate tests exercise application-level deduplication | ✅ | `TestHTTPConcurrentSameBet`; `TestSubmitReplayAndConflicts`; `TestInboundDuplicateSQSCopiesOneDebit` (distinct FIFO dedup ids, same envelope `messageId`) | |
 | TST-18 | `go test -race` on applicable tests | ✅ | `go test -race ./...` including `internal/domain` | |
 
@@ -209,5 +209,5 @@ the `spec-audit` skill or when completing a deliverable.
 | ENT-04 | Automatic IdP provisioning and test identities | ✅ | `docker/keycloak/realm-wagering.json`; Compose `--import-realm`; [auth.md](../api/auth.md); [README](../../README.md) Authentication | Local dummy client secrets |
 | ENT-05 | ARCHITECTURE.md with decisions, limitations, interpretations and unfinished work | 🚧 | [ARCHITECTURE.md](../../ARCHITECTURE.md); [docs/adr/](../adr/) | Phase 8 worker summarized; ADRs 0006–0019 Proposed |
 | ENT-06 | `docker compose up --build`, `go test ./...`, `go test -race ./...`, `go vet ./...` | ✅ | [README](../../README.md); Compose stack healthy; unit/`vet`/`-race` pass | |
-| ENT-07 | Separate docs: test dependencies, integration, multiple instances, failures, build tags | 🚧 | [test-dependencies.md](../runbooks/test-dependencies.md); [integration.md](../runbooks/integration.md); [ADR 0005](../adr/0005-test-strategy-initial.md) | TST-04 and TST-07 runbooks; multi-instance / failure runbooks still placeholders |
+| ENT-07 | Separate docs: test dependencies, integration, multiple instances, failures, build tags | 🚧 | [test-dependencies.md](../runbooks/test-dependencies.md); [integration.md](../runbooks/integration.md); [multiple-instances.md](../runbooks/multiple-instances.md); [failure-simulation.md](../runbooks/failure-simulation.md); [ADR 0005](../adr/0005-test-strategy-initial.md), [ADR 0020](../adr/0020-multi-instance-and-failure-injection.md) | Pending-reference operator runbook and optional load test still later |
 | ENT-08 | `gofmt`-formatted code and reproducible dependencies | 🚧 | [ADR 0005](../adr/0005-test-strategy-initial.md); `gofmt -l .` in README | Domain added in Phase 2 |
