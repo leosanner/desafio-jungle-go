@@ -28,6 +28,12 @@ func setValidEnv(t *testing.T) {
 	t.Setenv("SQS_VISIBILITY_TIMEOUT", "30s")
 	t.Setenv("SQS_WAIT_TIME", "20s")
 	t.Setenv("SQS_BACKOFF_MAX", "20s")
+	t.Setenv("PENDING_POLL_INTERVAL", "250ms")
+	t.Setenv("PENDING_BATCH_SIZE", "10")
+	t.Setenv("PENDING_LEASE", "30s")
+	t.Setenv("PENDING_BACKOFF_MAX", "1m")
+	t.Setenv("PENDING_MAX_ATTEMPTS", "8")
+	t.Setenv("PENDING_TTL", "5m")
 	t.Setenv("OIDC_ISSUER", "http://localhost:8081/realms/wagering")
 	t.Setenv("OIDC_AUDIENCE", "wagering-api")
 	t.Setenv("OIDC_INTERNAL_CLIENT", "wagering-internal")
@@ -84,6 +90,24 @@ func TestLoadSuccess(t *testing.T) {
 	}
 	if cfg.SQSBackoffMax != 20*time.Second {
 		t.Errorf("SQSBackoffMax = %s", cfg.SQSBackoffMax)
+	}
+	if cfg.PendingPollInterval != 250*time.Millisecond {
+		t.Errorf("PendingPollInterval = %s", cfg.PendingPollInterval)
+	}
+	if cfg.PendingBatchSize != 10 {
+		t.Errorf("PendingBatchSize = %d", cfg.PendingBatchSize)
+	}
+	if cfg.PendingLease != 30*time.Second {
+		t.Errorf("PendingLease = %s", cfg.PendingLease)
+	}
+	if cfg.PendingBackoffMax != time.Minute {
+		t.Errorf("PendingBackoffMax = %s", cfg.PendingBackoffMax)
+	}
+	if cfg.PendingMaxAttempts != 8 {
+		t.Errorf("PendingMaxAttempts = %d", cfg.PendingMaxAttempts)
+	}
+	if cfg.PendingTTL != 5*time.Minute {
+		t.Errorf("PendingTTL = %s", cfg.PendingTTL)
 	}
 }
 
@@ -158,6 +182,12 @@ func TestLoadMissingRequired(t *testing.T) {
 		"SQS_VISIBILITY_TIMEOUT",
 		"SQS_WAIT_TIME",
 		"SQS_BACKOFF_MAX",
+		"PENDING_POLL_INTERVAL",
+		"PENDING_BATCH_SIZE",
+		"PENDING_LEASE",
+		"PENDING_BACKOFF_MAX",
+		"PENDING_MAX_ATTEMPTS",
+		"PENDING_TTL",
 		"FX_STOP_TIMEOUT",
 		"OIDC_ISSUER",
 		"OIDC_AUDIENCE",

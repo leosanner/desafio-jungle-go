@@ -48,6 +48,12 @@ type Config struct {
 	OIDCAudience         string
 	OIDCJWKSURL          string
 	OIDCInternalClient   string
+	PendingPollInterval  time.Duration
+	PendingBatchSize     int
+	PendingLease         time.Duration
+	PendingBackoffMax    time.Duration
+	PendingMaxAttempts   int
+	PendingTTL           time.Duration
 }
 
 // Load reads configuration from the environment and validates it.
@@ -88,6 +94,30 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	pendingPoll, err := parseDuration("PENDING_POLL_INTERVAL")
+	if err != nil {
+		return Config{}, err
+	}
+	pendingLease, err := parseDuration("PENDING_LEASE")
+	if err != nil {
+		return Config{}, err
+	}
+	pendingBackoff, err := parseDuration("PENDING_BACKOFF_MAX")
+	if err != nil {
+		return Config{}, err
+	}
+	pendingTTL, err := parseDuration("PENDING_TTL")
+	if err != nil {
+		return Config{}, err
+	}
+	pendingBatch, err := parsePositiveInt("PENDING_BATCH_SIZE")
+	if err != nil {
+		return Config{}, err
+	}
+	pendingMaxAttempts, err := parsePositiveInt("PENDING_MAX_ATTEMPTS")
+	if err != nil {
+		return Config{}, err
+	}
 
 	cfg := Config{
 		LogLevel:             os.Getenv("LOG_LEVEL"),
@@ -114,6 +144,12 @@ func Load() (Config, error) {
 		OIDCAudience:         strings.TrimSpace(os.Getenv("OIDC_AUDIENCE")),
 		OIDCJWKSURL:          strings.TrimSpace(os.Getenv("OIDC_JWKS_URL")),
 		OIDCInternalClient:   strings.TrimSpace(os.Getenv("OIDC_INTERNAL_CLIENT")),
+		PendingPollInterval:  pendingPoll,
+		PendingBatchSize:     pendingBatch,
+		PendingLease:         pendingLease,
+		PendingBackoffMax:    pendingBackoff,
+		PendingMaxAttempts:   pendingMaxAttempts,
+		PendingTTL:           pendingTTL,
 	}
 	if err := cfg.Validate(); err != nil {
 		return Config{}, err
@@ -197,6 +233,24 @@ func (c *Config) Validate() error {
 	}
 	if c.SQSBackoffMax <= 0 {
 		return fmt.Errorf("%w: SQS_BACKOFF_MAX must be positive", ErrInvalidDuration)
+	}
+	if c.PendingPollInterval <= 0 {
+		return fmt.Errorf("%w: PENDING_POLL_INTERVAL must be positive", ErrInvalidDuration)
+	}
+	if c.PendingLease <= 0 {
+		return fmt.Errorf("%w: PENDING_LEASE must be positive", ErrInvalidDuration)
+	}
+	if c.PendingBackoffMax <= 0 {
+		return fmt.Errorf("%w: PENDING_BACKOFF_MAX must be positive", ErrInvalidDuration)
+	}
+	if c.PendingTTL <= 0 {
+		return fmt.Errorf("%w: PENDING_TTL must be positive", ErrInvalidDuration)
+	}
+	if c.PendingBatchSize <= 0 {
+		return fmt.Errorf("%w: PENDING_BATCH_SIZE must be positive", ErrInvalidInt)
+	}
+	if c.PendingMaxAttempts <= 0 {
+		return fmt.Errorf("%w: PENDING_MAX_ATTEMPTS must be positive", ErrInvalidInt)
 	}
 	return nil
 }

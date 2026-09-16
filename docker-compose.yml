@@ -87,6 +87,12 @@ services:
       SQS_VISIBILITY_TIMEOUT: 30s
       SQS_WAIT_TIME: 20s
       SQS_BACKOFF_MAX: 20s
+      PENDING_POLL_INTERVAL: 250ms
+      PENDING_BATCH_SIZE: "10"
+      PENDING_LEASE: 30s
+      PENDING_BACKOFF_MAX: 1m
+      PENDING_MAX_ATTEMPTS: "8"
+      PENDING_TTL: 5m
       OIDC_ISSUER: http://keycloak:8080/realms/wagering
       OIDC_AUDIENCE: wagering-api
       OIDC_JWKS_URL: http://keycloak:8080/realms/wagering/protocol/openid-connect/certs
