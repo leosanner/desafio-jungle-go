@@ -20,6 +20,9 @@ Accepted ADRs are not rewritten: a change of direction creates a new ADR that su
 | [0009](0009-sql-unit-of-work.md) | SQL unit of work / transaction boundary | Proposed |
 | [0010](0010-per-wallet-concurrency.md) | Per-wallet concurrency | Proposed |
 | [0011](0011-oidc-keycloak-auth.md) | OIDC authentication with Keycloak | Proposed |
+| [0012](0012-idempotency-canonical-hash.md) | Canonical idempotency hash | Proposed |
+| [0013](0013-http-status-mapping.md) | HTTP status and error-body mapping | Proposed |
+| [0014](0014-outbox-persistence.md) | Outbox persistence without a publisher | Proposed |
 
 ## Pending decisions
 
@@ -31,13 +34,13 @@ Decisions the challenge requires documenting that don't have an ADR yet:
 - [x] `Money` representation (`int64` minor units) — [ADR 0006](0006-money-representation.md) (Proposed); schema mapping lands in Phase 3
 - [x] SQL transaction boundary across repositories (unit of work) — [ADR 0009](0009-sql-unit-of-work.md) (Proposed)
 - [x] Per-wallet concurrency strategy (pessimistic × optimistic × conditional update) — [ADR 0010](0010-per-wallet-concurrency.md) (Proposed)
-- [ ] Idempotency: key scope, hash algorithm, canonical JSON and normalizations (conflict rules exist in domain)
+- [x] Idempotency: key scope, hash algorithm, canonical JSON and normalizations — [ADR 0012](0012-idempotency-canonical-hash.md) (Proposed)
 - [x] `WagerTransaction` state machine and transient × permanent failure classification — [ADR 0007](0007-wager-transaction-state-machine.md) (Proposed)
 - [ ] Pending references: backoff, max attempts/TTL (wait vs unsuccessful reference is in ADR 0007)
 - [x] `REFUND` and `ROLLBACK` combinations on the same bet — [ADR 0008](0008-refund-rollback-combinations.md) (Proposed)
-- [ ] `failureCode` HTTP mapping (catalog started in [`docs/api/failure-codes.md`](../api/failure-codes.md))
+- [x] `failureCode` HTTP mapping — [ADR 0013](0013-http-status-mapping.md) (Proposed); [`docs/api/status.md`](../api/status.md)
 - [ ] SQS inbox: visibility timeout, attempts, DLQ, invalid messages, `MessageGroupId`/`MessageDeduplicationId`
-- [ ] Outbox: concurrent claim, lease, backoff, event destination and routing
+- [ ] Outbox: concurrent claim, lease, backoff, event destination and routing (table + insert: [ADR 0014](0014-outbox-persistence.md))
 - [x] IdP, token validation and permission model (providers × internal service) — [ADR 0011](0011-oidc-keycloak-auth.md) (Proposed)
 - [ ] Logs, metrics and (optional) tracing — JSON `log/slog` chosen in [ADR 0002](0002-go-version-and-http-router.md); correlation fields, metrics and tracing still open
 - [x] Fx lifecycle and shutdown strategy
