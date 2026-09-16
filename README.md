@@ -3,9 +3,9 @@
 Go + Uber Fx service that processes financial operations from game providers via HTTP and SQS, backed by
 PostgreSQL, Keycloak and LocalStack. Full challenge statement (in Portuguese) in [`init.md`](init.md).
 
-> Phase 5: process skeleton, domain, financial persistence, OIDC, and **HTTP use cases**
-> (wallets, wagering operations, idempotency, ledger, reconciliation). Outbox rows are persisted;
-> the publisher worker is Phase 6. See [`docs/roadmap.md`](docs/roadmap.md).
+> Phase 6: process skeleton, domain, financial persistence, OIDC, HTTP use cases, and a
+> **concurrent outbox publisher** (SQS FIFO `wager-events.fifo`). No inbound SQS consumer yet.
+> See [`docs/roadmap.md`](docs/roadmap.md).
 
 ## Prerequisites
 
@@ -30,8 +30,13 @@ Copy [`.env.example`](.env.example) and adjust. Do not commit real secrets.
 | `AWS_ENDPOINT_URL` | SQS endpoint (`http://localhost:4566` on the host; Compose-internal URL in Docker) |
 | `SQS_WAGER_QUEUE_NAME` | FIFO queue name: `wager-transactions.fifo` |
 | `SQS_WAGER_DLQ_NAME` | FIFO DLQ name: `wager-transactions-dlq.fifo` |
+| `SQS_EVENTS_QUEUE_NAME` | Outbox destination FIFO: `wager-events.fifo` |
 | `FX_START_TIMEOUT` | Fx start timeout (Go duration, e.g. `15s`) |
 | `FX_STOP_TIMEOUT` | Fx stop timeout (Go duration, e.g. `30s`) |
+| `OUTBOX_POLL_INTERVAL` | Publisher poll interval (e.g. `250ms`) |
+| `OUTBOX_BATCH_SIZE` | Max unpublished rows claimed per tick (positive integer) |
+| `OUTBOX_LEASE` | Claim lease / in-flight publish deadline (e.g. `30s`) |
+| `OUTBOX_BACKOFF_MAX` | Cap for exponential publish retry backoff (e.g. `1m`) |
 | `OIDC_ISSUER` | Expected JWT `iss` (Keycloak realm URL, no trailing slash) |
 | `OIDC_AUDIENCE` | Expected JWT `aud` (`wagering-api`) |
 | `OIDC_JWKS_URL` | Optional JWKS URL; defaults to `{OIDC_ISSUER}/protocol/openid-connect/certs` |
@@ -62,15 +67,18 @@ published ports are listed in [`docs/runbooks/test-dependencies.md`](docs/runboo
 
 ## SQS queues
 
-LocalStack is provisioned with two FIFO queues and redrive from the main queue to the DLQ:
+LocalStack is provisioned with inbound FIFO queues (redrive to the DLQ) and an outbound events queue:
 
 | Queue | Role |
 | --- | --- |
 | `wager-transactions.fifo` | Inbound wager operations (`SQS_WAGER_QUEUE_NAME`) |
 | `wager-transactions-dlq.fifo` | Dead-letter queue (`SQS_WAGER_DLQ_NAME`) |
+| `wager-events.fifo` | Outbox publisher destination (`SQS_EVENTS_QUEUE_NAME`) |
 
-The process **does not consume** these queues. It only uses SQS for readiness (queue exists /
-reachable). Message contracts: [`docs/events/README.md`](docs/events/README.md).
+The process **does not consume** inbound queues. It publishes committed outbox rows to
+`wager-events.fifo` ([ADR 0015](docs/adr/0015-outbox-destination-and-routing.md),
+[ADR 0016](docs/adr/0016-outbox-claim-and-backoff.md)). Message contracts:
+[`docs/events/README.md`](docs/events/README.md).
 
 ## Migrations
 
@@ -80,7 +88,7 @@ The app applies golang-migrate **Up** on start from `MIGRATIONS_PATH`.
 | --- | --- |
 | `000001_bootstrap` | Schema `wagering` |
 | `000002_financial_schema` | `wallets`, `wager_transactions`, `wallet_ledger_entries` (BIGINT minor units, uniqueness/check constraints, append-only ledger trigger) |
-| `000003_outbox` | `outbox_events` (unpublished rows; publisher in Phase 6) |
+| `000003_outbox` | `outbox_events` (insert unpublished; publisher claims and sets `published_at`) |
 
 Rollback is **not** run on shutdown. Using the [golang-migrate CLI](https://github.com/golang-migrate/migrate):
 
@@ -165,8 +173,10 @@ Integration tests use build tag `integration`. They skip if required env is unse
 That skip is not a substitute for CI with real containers.
 
 **TST-04** (postgres migrations, constraints, ledger immutability, financial atomicity) and
-**Phase 5 HTTP** (`TestHTTPPhase5UseCases`, concurrency) need `POSTGRES_DSN` only. **TST-07**
-(auth against the real IdP) needs Keycloak and `OIDC_ISSUER`:
+**Phase 5 HTTP** (`TestHTTPPhase5UseCases`, concurrency) need `POSTGRES_DSN` only. **Phase 6 outbox**
+(`TestOutbox*` in `internal/adapter/postgres`) needs `POSTGRES_DSN` plus LocalStack
+(`AWS_ENDPOINT_URL` and AWS dummy keys) for publish tests; claim/SKIP LOCKED tests need Postgres
+only. **TST-07** (auth against the real IdP) needs Keycloak and `OIDC_ISSUER`:
 
 ```sh
 docker compose up -d postgres keycloak localstack

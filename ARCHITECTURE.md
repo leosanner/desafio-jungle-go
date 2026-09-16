@@ -5,11 +5,10 @@
 
 ## Overview
 
-Phase 5 of a Go + Uber Fx wagering service: hexagonal layout, stdlib HTTP, PostgreSQL via `pgx`,
+Phase 6 of a Go + Uber Fx wagering service: hexagonal layout, stdlib HTTP, PostgreSQL via `pgx`,
 golang-migrate, LocalStack SQS queues, a **pure domain model**, **financial persistence**, **OIDC
-authentication**, and **HTTP use cases** (wallet opening, wagering operations with persistent
-idempotency, ledger reads, reconciliation). Outbox **rows** are written in the same commit; there is
-still no publisher worker, SQS consumer, or pending-reference worker.
+authentication**, **HTTP use cases**, and a **concurrent outbox publisher** (SKIP LOCKED claim,
+SQS FIFO `wager-events.fifo`). There is still no SQS consumer or pending-reference worker.
 
 - Module: `github.com/leosanner/desafio-jungle-go` ([ADR 0001](docs/adr/0001-package-layout-and-layer-boundaries.md))
 - Go 1.25, `net/http` ServeMux, `log/slog` JSON ([ADR 0002](docs/adr/0002-go-version-and-http-router.md))
@@ -115,8 +114,8 @@ uses `INSUFFICIENT_FUNDS_REVERSAL`, not `INSUFFICIENT_FUNDS`.
 ## Inbox and SQS consumer
 
 **Provisioned queues (Phase 1):** `wager-transactions.fifo` and `wager-transactions-dlq.fifo` with
-redrive. Message contracts, visibility timeout, attempts, invalid messages, and
-`MessageGroupId`/`MessageDeduplicationId` — _TBD_
+redrive. Message contracts, visibility timeout, attempts, invalid messages, and inbound
+`MessageGroupId`/`MessageDeduplicationId` — _TBD_ (Phase 7).
 
 See [`docs/events/README.md`](docs/events/README.md).
 
@@ -125,8 +124,16 @@ See [`docs/events/README.md`](docs/events/README.md).
 Domain event types and `WalletBalanceChanged` payload: [`docs/events/outbox-events.md`](docs/events/outbox-events.md).
 
 **Proposed:** [ADR 0014](docs/adr/0014-outbox-persistence.md). `wagering.outbox_events` is written in
-the same `Within` as wallet, transaction and ledger. Rows stay unpublished (`published_at` NULL).
-Concurrent claim, backoff, recovery, destination and routing. — _TBD_ (Phase 6)
+the same `Within` as wallet, transaction and ledger.
+
+**Proposed:** [ADR 0015](docs/adr/0015-outbox-destination-and-routing.md). Publisher sends the OBX-06
+envelope to FIFO `wager-events.fifo` (`SQS_EVENTS_QUEUE_NAME`). `MessageGroupId` = `aggregateId`;
+`MessageDeduplicationId` = `eventId`. At-least-once; consumers dedup by `eventId`.
+
+**Proposed:** [ADR 0016](docs/adr/0016-outbox-claim-and-backoff.md). Separate worker claims due rows
+with `SELECT … FOR UPDATE SKIP LOCKED`, leases via `next_attempt_at`, publishes outside the lock,
+then sets `published_at`. Exponential backoff on send failure. `eventId` is never rewritten.
+Injectable `AfterPublish` hook is tests-only (publish-before-ack).
 
 ## Authentication and authorization
 
@@ -143,14 +150,14 @@ SQS is gated by AWS credentials (LocalStack dummies in Compose). There is no con
 
 ## Uber Fx usage and shutdown
 
-- One `fx.Module` per area; plain constructors; `fx.Invoke` only to run the HTTP server (and later workers).
+- One `fx.Module` per area; plain constructors; `fx.Invoke` only to run the HTTP server and workers.
 - Config validated on start; start/stop timeouts from `FX_START_TIMEOUT` / `FX_STOP_TIMEOUT`.
 - Check dependencies at startup (PostgreSQL ping, SQS queue exists, JWKS reachable) and fail fast
   with a clear error.
 - HTTP: Listen synchronously, Serve asynchronously, `Shutdown` on stop.
 - Readiness fails as soon as shutdown starts.
 - `OnStop` runs in reverse order; hooks live on the resource constructor.
-- Workers (later): cancel fetch, finish or release in-flight work, observable `done` channel. None in Phase 1.
+- Outbox worker: cancel poll, finish the in-flight batch within a lease-bounded context, wait on `done`. SQS consumer and pending-reference workers remain later.
 
 [ADR 0004](docs/adr/0004-fx-lifecycle-and-shutdown.md).
 
@@ -170,11 +177,11 @@ Reconciliation divergences are logged (`walletId`, entry count, no full payload)
 
 ## Limitations, interpretations and unfinished work
 
-Phase 5 adds HTTP use cases (`internal/app`, protected handlers). Still unfinished:
+Phase 6 adds the outbox publisher worker. Still unfinished:
 
-- No SQS consumer, outbox publisher, or pending-reference worker. `PENDING_REFERENCE` is persisted
-  and returned as `202` until Phase 8 resumes it.
-- ADRs 0006–0014 are **Proposed** until confirmed.
+- No SQS consumer or pending-reference worker. `PENDING_REFERENCE` is persisted and returned as
+  `202` until Phase 8 resumes it.
+- ADRs 0006–0016 are **Proposed** until confirmed.
 - STK-05 is documented and implemented: `pgx/v5` ([ADR 0003](docs/adr/0003-database-access-and-migrations.md)),
   `BIGINT` minor units ([ADR 0006](docs/adr/0006-money-representation.md), migration `000002`),
   unit of work ([ADR 0009](docs/adr/0009-sql-unit-of-work.md)), outbox insert ([ADR 0014](docs/adr/0014-outbox-persistence.md),
@@ -182,8 +189,10 @@ Phase 5 adds HTTP use cases (`internal/app`, protected handlers). Still unfinish
 - Inbox persistence remains later (same `Repositories` / `Within` pattern).
 - TST-04 is covered by `-tags=integration` tests in `internal/adapter/postgres`.
   HTTP use cases: `TestHTTPPhase5UseCases`, `TestHTTPConcurrentSameBet`, `TestHTTPTwoBetsOnHundred`,
-  `TestHTTPDistinctWalletsParallel` (`POSTGRES_DSN`). TST-07 needs Keycloak and `OIDC_ISSUER`.
-  Multi-instance runs and failure injection remain later
+  `TestHTTPDistinctWalletsParallel` (`POSTGRES_DSN`). Phase 6 outbox: `TestOutboxClaimSkipLocked`,
+  `TestOutboxTwoPublishersContend`, `TestOutboxRecoverPublishBeforeAck` (`POSTGRES_DSN` + LocalStack
+  for publish). TST-07 needs Keycloak and `OIDC_ISSUER`.
+  Multi-instance runs remain Phase 9
   ([ADR 0005](docs/adr/0005-test-strategy-initial.md)).
 - Health endpoints stay public.
 

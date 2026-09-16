@@ -79,14 +79,16 @@ migrate -path migrations -database "$POSTGRES_DSN" down 1
   PostgreSQL / Keycloak / LocalStack when those tests exist ([ADR 0005](docs/adr/0005-test-strategy-initial.md)).
   TST-04 postgres tests need `POSTGRES_DSN` only (Keycloak/SQS not required). HTTP Phase 5
   integration tests (`TestHTTPPhase5UseCases` and concurrency tests) also need `POSTGRES_DSN` only.
-  TST-07 needs `OIDC_ISSUER` and a running Keycloak with the imported `wagering` realm.
+  Phase 6 outbox publish tests (`TestOutboxRelay*`, `TestOutboxTwoPublishersContend`,
+  `TestOutboxRecoverPublishBeforeAck`) need `POSTGRES_DSN` and LocalStack (`AWS_ENDPOINT_URL`).
+  Claim/SKIP LOCKED tests need `POSTGRES_DSN` only. TST-07 needs `OIDC_ISSUER` and a running
+  Keycloak with the imported `wagering` realm.
 
 ## Current state
 
-Phase 5 HTTP use cases are in place: wallet opening, wagering operations with persistent
-idempotency (canonical SHA-256 hash), ledger reads, reconciliation, and unpublished outbox rows in
-the same commit. Domain from Phase 2, persistence from Phase 3, OIDC from Phase 4 remain.
-**No SQS consumer, outbox publisher, or pending-reference worker.**
+Phase 6 outbox publisher is in place: SKIP LOCKED claim, lease via `next_attempt_at`, publish to
+SQS FIFO `wager-events.fifo`, backoff, and recovery of send-without-ack. HTTP use cases, domain,
+persistence and OIDC remain. **No SQS inbound consumer or pending-reference worker.**
 Decisions: [ADR 0001](docs/adr/0001-package-layout-and-layer-boundaries.md)–[0005](docs/adr/0005-test-strategy-initial.md)
-(accepted); [ADR 0006](docs/adr/0006-money-representation.md)–[0014](docs/adr/0014-outbox-persistence.md)
-(proposed). Next: Phase 6 outbox publisher.
+(accepted); [ADR 0006](docs/adr/0006-money-representation.md)–[0016](docs/adr/0016-outbox-claim-and-backoff.md)
+(proposed). Next: Phase 7 SQS consumer with inbox.

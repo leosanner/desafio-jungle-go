@@ -46,7 +46,7 @@ Published ports are defined in `docker-compose.yml` and `.env.example`. The usua
 | --- | --- | --- |
 | PostgreSQL | `5432` | Accepts connections with `POSTGRES_DSN` (e.g. `pg_isready` or `psql "$POSTGRES_DSN" -c 'select 1'`) |
 | Keycloak | `8081` | Realm `wagering` imported; `GET {OIDC_ISSUER}/.well-known/openid-configuration` returns 200; admin console at `http://localhost:8081` |
-| LocalStack | `4566` | SQS `GetQueueUrl` succeeds for `wager-transactions.fifo` and `wager-transactions-dlq.fifo` |
+| LocalStack | `4566` | SQS `GetQueueUrl` succeeds for `wager-transactions.fifo`, `wager-transactions-dlq.fifo` and `wager-events.fifo` |
 | wagering (when started via Compose) | from `HTTP_ADDR` (often `8080`) | `GET /health/ready` returns `200` |
 
 Confirm actual mappings with:
@@ -68,6 +68,8 @@ docker compose ps
      --queue-name wager-transactions.fifo
    aws --endpoint-url "${AWS_ENDPOINT_URL:-http://localhost:4566}" sqs get-queue-url \
      --queue-name wager-transactions-dlq.fifo
+   aws --endpoint-url "${AWS_ENDPOINT_URL:-http://localhost:4566}" sqs get-queue-url \
+     --queue-name wager-events.fifo
    ```
 
 4. Keycloak: `curl -sS "$OIDC_ISSUER/.well-known/openid-configuration"` (issuer from `.env.example`).

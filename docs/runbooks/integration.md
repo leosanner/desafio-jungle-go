@@ -1,8 +1,17 @@
-# Integration tests (TST-04, TST-07, HTTP use cases)
+# Integration tests (TST-04, TST-07, HTTP use cases, Phase 6 outbox)
 
 Postgres constraint, atomicity and HTTP use-case tests use build tag `integration` and a real PostgreSQL.
 Keycloak and SQS are **not** required for TST-04 or the Phase 5 HTTP tests (`TestHTTPPhase5UseCases`,
 `TestHTTPConcurrentSameBet`, `TestHTTPTwoBetsOnHundred`, `TestHTTPDistinctWalletsParallel`).
+
+Phase 6 claim tests (`TestOutboxClaimSkipLocked`, `TestOutboxMarkPublishedAndRetry`) need
+`POSTGRES_DSN` only. Publish/recovery tests (`TestOutboxRelayPublishesOpeningEvents`,
+`TestOutboxRelayPublishesEnvelope`, `TestOutboxTwoPublishersContend`,
+`TestOutboxRecoverPublishBeforeAck`) also need LocalStack (`AWS_ENDPOINT_URL`, dummy AWS keys).
+
+The publish-before-ack recovery test installs `OutboxRelay.SetAfterPublish` so `MarkPublished` is
+skipped after a successful `SendMessage` ([ADR 0016](../adr/0016-outbox-claim-and-backoff.md)). That
+hook is tests-only.
 
 OIDC tests (TST-07) use the same tag and a real Keycloak with realm `wagering` imported.
 
@@ -10,6 +19,7 @@ OIDC tests (TST-07) use the same tag and a real Keycloak with realm `wagering` i
 
 - Docker and Docker Compose
 - `POSTGRES_DSN` for TST-04 (host value in [`.env.example`](../../.env.example))
+- `AWS_ENDPOINT_URL` (and a healthy LocalStack) for Phase 6 publish tests
 - `OIDC_ISSUER` (and a healthy Keycloak) for TST-07
 
 ## Run
@@ -20,6 +30,14 @@ Postgres only (TST-04 and HTTP Phase 5):
 docker compose up -d postgres
 set -a && source .env.example && set +a
 go test -tags=integration ./internal/adapter/postgres/... ./internal/adapter/http/... ./internal/app/...
+```
+
+Postgres + LocalStack (Phase 6 outbox publish, TST-13):
+
+```sh
+docker compose up -d postgres localstack
+set -a && source .env.example && set +a
+go test -tags=integration ./internal/adapter/postgres/... -run 'TestOutbox'
 ```
 
 Keycloak (TST-07):
@@ -46,6 +64,8 @@ Files:
 - `internal/adapter/postgres/constraints_integration_test.go` — CHECK/UNIQUE and ledger append-only trigger
 - `internal/adapter/postgres/uow_integration_test.go` — atomic commit/rollback, duplicate wallet, money round-trip, concurrent 80.00 bets on 100.00
 - `internal/adapter/postgres/isolated_db_integration_test.go` — one `wagering_it_*` database per test (does not migrate the Compose `wagering` database)
+- `internal/adapter/postgres/outbox_integration_test.go` — claim `SKIP LOCKED`, relay publish, two publishers (TST-13), publish-before-ack recovery
+- `internal/composition/start_stop_integration_test.go` — Fx start/stop including the outbox worker
 - `internal/adapter/auth/oidc_integration_test.go` — `TestOIDCVerifierRealIdP`
 - `internal/adapter/http/auth_integration_test.go` — `TestAuthRealIdP` (missing/invalid token, isolation, internal restriction, no wallet writes on 403)
 
