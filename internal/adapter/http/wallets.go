@@ -48,6 +48,11 @@ func (s *Server) handleOpenWallet(w http.ResponseWriter, r *http.Request) {
 		s.writeUseCaseError(w, err)
 		return
 	}
+	s.log.Info("wallet opened",
+		"correlationId", correlationID(r),
+		"walletId", out.Wallet.ID(),
+		"playerId", out.Wallet.PlayerID(),
+	)
 	s.writeJSON(w, http.StatusCreated, walletJSON(out.Wallet))
 }
 

@@ -349,7 +349,7 @@ func (e *httpEnv) server(t *testing.T, actor app.Actor) *Server {
 	t.Helper()
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	svc := app.NewService(e.uow, app.SystemClock{}, app.UUIDGenerator{}, app.NopMetrics{})
-	return New(config.Config{HTTPAddr: ":0"}, log, nil, staticTokens{actor: actor}, svc)
+	return New(config.Config{HTTPAddr: ":0"}, log, nil, staticTokens{actor: actor}, svc, app.NopMetrics{})
 }
 
 func (e *httpEnv) countOutbox(t *testing.T) int {

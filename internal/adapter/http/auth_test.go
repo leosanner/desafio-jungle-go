@@ -29,7 +29,7 @@ func (s staticTokens) Verify(context.Context, string) (app.Actor, error) {
 func authServer(t *testing.T, tokens TokenVerifier) *Server {
 	t.Helper()
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	return New(config.Config{HTTPAddr: ":0"}, log, nil, tokens, stubService())
+	return New(config.Config{HTTPAddr: ":0"}, log, nil, tokens, stubService(), app.NopMetrics{})
 }
 
 func TestHealthStaysPublic(t *testing.T) {

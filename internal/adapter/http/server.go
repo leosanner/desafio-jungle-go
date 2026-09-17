@@ -27,21 +27,29 @@ type Server struct {
 	checkers     Checkers
 	tokens       TokenVerifier
 	svc          *app.Service
+	metrics      app.Metrics
 	shuttingDown atomic.Bool
 }
 
-// New constructs the HTTP server, public health routes and protected business routes.
-func New(cfg config.Config, log *slog.Logger, checkers Checkers, tokens TokenVerifier, svc *app.Service) *Server {
+// New constructs the HTTP server, public health/metrics routes and protected business routes.
+func New(cfg config.Config, log *slog.Logger, checkers Checkers, tokens TokenVerifier, svc *app.Service, metrics app.Metrics) *Server {
+	if metrics == nil {
+		metrics = app.NopMetrics{}
+	}
 	s := &Server{
 		addr:     cfg.HTTPAddr,
 		log:      log,
 		checkers: checkers,
 		tokens:   tokens,
 		svc:      svc,
+		metrics:  metrics,
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health/live", s.handleLive)
 	mux.HandleFunc("GET /health/ready", s.handleReady)
+	if h, ok := metrics.(scrapeHandler); ok {
+		mux.Handle("GET /metrics", h.Handler())
+	}
 
 	mux.Handle("POST /wallets", s.authenticate(s.requireInternal(http.HandlerFunc(s.handleOpenWallet))))
 	mux.Handle("GET /wallets/{walletId}", s.authenticate(s.requireInternal(http.HandlerFunc(s.handleGetWallet))))
@@ -54,7 +62,7 @@ func New(cfg config.Config, log *slog.Logger, checkers Checkers, tokens TokenVer
 
 	s.srv = &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           mux,
+		Handler:           s.observe(mux),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	return s

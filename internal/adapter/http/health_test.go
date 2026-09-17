@@ -27,7 +27,7 @@ func (f fakeChecker) Check(context.Context) error { return f.err }
 func testServer(t *testing.T, checkers Checkers) *Server {
 	t.Helper()
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	return New(config.Config{HTTPAddr: ":0"}, log, checkers, rejectTokens{}, stubService())
+	return New(config.Config{HTTPAddr: ":0"}, log, checkers, rejectTokens{}, stubService(), app.NopMetrics{})
 }
 
 type rejectTokens struct{}

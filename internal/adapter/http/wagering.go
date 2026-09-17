@@ -100,6 +100,15 @@ func (s *Server) handlePostWagering(w http.ResponseWriter, r *http.Request) {
 		s.writeUseCaseError(w, err)
 		return
 	}
+	s.log.Info("wagering submitted",
+		"correlationId", correlationID(r),
+		"transactionId", out.Transaction.ID(),
+		"walletId", out.Transaction.WalletID(),
+		"providerId", out.Transaction.ProviderID(),
+		"kind", string(out.Transaction.Kind()),
+		"status", string(out.Transaction.Status()),
+		"idempotentReplay", out.IdempotentReplay,
+	)
 	s.writeOperation(w, out)
 }
 

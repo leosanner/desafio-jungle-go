@@ -19,6 +19,7 @@ type Consumer struct {
 	client      *Client
 	svc         *app.Service
 	log         *slog.Logger
+	metrics     app.Metrics
 	visibility  time.Duration
 	wait        time.Duration
 	backoffMax  time.Duration
@@ -29,11 +30,15 @@ type Consumer struct {
 }
 
 // NewConsumer constructs the inbound adapter. Production wiring leaves AfterCommit nil.
-func NewConsumer(client *Client, svc *app.Service, cfg config.Config, log *slog.Logger) *Consumer {
+func NewConsumer(client *Client, svc *app.Service, cfg config.Config, log *slog.Logger, metrics app.Metrics) *Consumer {
+	if metrics == nil {
+		metrics = app.NopMetrics{}
+	}
 	return &Consumer{
 		client:     client,
 		svc:        svc,
 		log:        log,
+		metrics:    metrics,
 		visibility: cfg.SQSVisibilityTimeout,
 		wait:       cfg.SQSWaitTime,
 		backoffMax: cfg.SQSBackoffMax,
@@ -91,14 +96,32 @@ func (c *Consumer) Handle(ctx context.Context, msg InboundMessage) {
 
 	cmd, err := ParseInbound([]byte(msg.Body))
 	if err != nil {
+		c.log.Info("sqs inbound rejected", "messageId", cmd.MessageID, "err", err)
 		c.finish(ctx, msg, cmd.MessageID, err)
 		return
 	}
-	_, err = c.svc.HandleInbound(ctx, cmd)
+	out, err := c.svc.HandleInbound(ctx, cmd)
 	if err != nil {
+		c.log.Info("sqs inbound failed",
+			"messageId", cmd.MessageID,
+			"correlationId", cmd.Submit.CorrelationID,
+			"walletId", cmd.Submit.WalletID,
+			"providerId", cmd.Submit.ProviderID,
+			"err", err,
+		)
 		c.finish(ctx, msg, cmd.MessageID, err)
 		return
 	}
+	c.log.Info("sqs inbound",
+		"messageId", cmd.MessageID,
+		"correlationId", cmd.Submit.CorrelationID,
+		"transactionId", out.Transaction.ID(),
+		"walletId", out.Transaction.WalletID(),
+		"providerId", out.Transaction.ProviderID(),
+		"kind", string(out.Transaction.Kind()),
+		"status", string(out.Transaction.Status()),
+		"idempotentReplay", out.IdempotentReplay,
+	)
 	if c.afterCommit != nil {
 		if hookErr := c.afterCommit(ctx, cmd.MessageID); hookErr != nil {
 			c.log.Info("sqs consumer: skip delete after commit", "messageId", cmd.MessageID)
@@ -126,6 +149,7 @@ func (c *Consumer) finish(ctx context.Context, msg InboundMessage, messageID str
 			c.retry(ctx, msg, err)
 			return
 		}
+		c.metricsOrNop().IncSQSDLQ()
 		if delErr := c.client.Delete(ctx, msg.ReceiptHandle); delErr != nil {
 			c.log.Error("sqs consumer: delete after dlq", "messageId", messageID, "err", delErr)
 		}
@@ -135,11 +159,19 @@ func (c *Consumer) finish(ctx context.Context, msg InboundMessage, messageID str
 }
 
 func (c *Consumer) retry(ctx context.Context, msg InboundMessage, cause error) {
+	c.metricsOrNop().IncSQSRetry()
 	delay := app.Backoff(msg.ReceiveCount, c.backoffMax)
 	c.log.Info("sqs consumer: retry", "receiveCount", msg.ReceiveCount, "delay", delay.String(), "err", cause)
 	if visErr := c.client.ChangeVisibility(ctx, msg.ReceiptHandle, delay); visErr != nil {
 		c.log.Error("sqs consumer: visibility", "err", visErr)
 	}
+}
+
+func (c *Consumer) metricsOrNop() app.Metrics {
+	if c.metrics == nil {
+		return app.NopMetrics{}
+	}
+	return c.metrics
 }
 
 func (c *Consumer) setInFlight(handle string) {

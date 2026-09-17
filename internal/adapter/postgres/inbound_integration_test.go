@@ -150,7 +150,7 @@ func newInboundConsumer(t *testing.T, db *testDB, client *sqsadapter.Client, vis
 		SQSVisibilityTimeout: visibility,
 		SQSWaitTime:          time.Second,
 		SQSBackoffMax:        2 * time.Second,
-	}, log)
+	}, log, app.NopMetrics{})
 }
 
 func waitProcess(t *testing.T, c *sqsadapter.Consumer) {

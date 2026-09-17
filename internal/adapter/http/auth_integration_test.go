@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/leosanner/desafio-jungle-go/internal/adapter/auth"
+	"github.com/leosanner/desafio-jungle-go/internal/app"
 	"github.com/leosanner/desafio-jungle-go/internal/config"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -36,7 +37,7 @@ func TestAuthRealIdP(t *testing.T) {
 		OIDCInternalClient: getenv("OIDC_INTERNAL_CLIENT", "wagering-internal"),
 	}
 	v := auth.NewOIDCVerifier(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)))
-	s := New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), nil, v, stubService())
+	s := New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), nil, v, stubService(), app.NopMetrics{})
 
 	providerA := clientCredentials(t, iss, "provider-a", "provider-a-secret")
 	providerB := clientCredentials(t, iss, "provider-b", "provider-b-secret")

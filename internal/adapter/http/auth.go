@@ -35,7 +35,7 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 				s.writeError(w, http.StatusServiceUnavailable, "unavailable", "identity provider unavailable")
 				return
 			}
-			s.log.Info("auth rejected", "reason", classifyAuthReason(err))
+			s.log.Info("auth rejected", "reason", classifyAuthReason(err), "correlationId", correlationID(r))
 			setWWWAuthenticate(w, "invalid_token")
 			s.writeError(w, http.StatusUnauthorized, "unauthenticated", "missing or invalid bearer token")
 			return

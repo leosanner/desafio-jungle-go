@@ -271,11 +271,40 @@ func (c Config) SlogLevel() slog.Level {
 	}
 }
 
-// NewLogger returns a JSON slog logger at the configured level.
+// NewLogger returns a JSON slog logger at the configured level. Credential and
+// financial-payload keys are redacted (ADR 0021).
 func NewLogger(cfg Config) *slog.Logger {
 	return slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: cfg.SlogLevel(),
+		Level:       cfg.SlogLevel(),
+		ReplaceAttr: RedactLogAttr,
 	}))
+}
+
+var redactedLogKeys = map[string]struct{}{
+	"authorization":       {},
+	"authorizationheader": {},
+	"token":               {},
+	"accesstoken":         {},
+	"refreshtoken":        {},
+	"password":            {},
+	"secret":              {},
+	"cookie":              {},
+	"payload":             {},
+	"body":                {},
+	"money":               {},
+	"amount":              {},
+	"initialbalance":      {},
+}
+
+// RedactLogAttr is slog ReplaceAttr: denylisted keys become "[redacted]".
+func RedactLogAttr(_ []string, a slog.Attr) slog.Attr {
+	key := strings.ToLower(a.Key)
+	key = strings.ReplaceAll(key, "-", "")
+	key = strings.ReplaceAll(key, "_", "")
+	if _, ok := redactedLogKeys[key]; ok {
+		return slog.String(a.Key, "[redacted]")
+	}
+	return a
 }
 
 func require(key, value string) error {
