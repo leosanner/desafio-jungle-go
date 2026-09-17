@@ -29,6 +29,7 @@ Accepted ADRs are not rewritten: a change of direction creates a new ADR that su
 | [0018](0018-sqs-inbound-consume.md) | SQS inbound consume, retry, DLQ and shutdown | Proposed |
 | [0019](0019-pending-reference-resume.md) | Pending-reference worker, backoff, TTL and PENDING resume | Proposed |
 | [0020](0020-multi-instance-and-failure-injection.md) | Multi-instance verification and failure injection | Proposed |
+| [0021](0021-observability-logs-and-metrics.md) | Observability: correlation logs and Prometheus metrics | Proposed |
 
 ## Pending decisions
 
@@ -48,6 +49,6 @@ Decisions the challenge requires documenting that don't have an ADR yet:
 - [x] SQS inbox: visibility timeout, attempts, DLQ, invalid messages, `MessageGroupId`/`MessageDeduplicationId` — [ADR 0017](0017-inbox-persistence.md) (inbox), [ADR 0018](0018-sqs-inbound-consume.md) (consume) (Proposed)
 - [x] Outbox: concurrent claim, lease, backoff, event destination and routing — [ADR 0014](0014-outbox-persistence.md) (insert), [ADR 0015](0015-outbox-destination-and-routing.md) (destination), [ADR 0016](0016-outbox-claim-and-backoff.md) (claimer) (Proposed)
 - [x] IdP, token validation and permission model (providers × internal service) — [ADR 0011](0011-oidc-keycloak-auth.md) (Proposed)
-- [ ] Logs, metrics and (optional) tracing — JSON `log/slog` chosen in [ADR 0002](0002-go-version-and-http-router.md); correlation fields, metrics and tracing still open
+- [x] Logs, metrics and (optional) tracing — JSON `log/slog` + correlation + Prometheus catalog in [ADR 0021](0021-observability-logs-and-metrics.md) (Proposed); tracing skipped
 - [x] Fx lifecycle and shutdown strategy
 - [x] Test strategy: build tags, containers, multiple instances and failure injection
