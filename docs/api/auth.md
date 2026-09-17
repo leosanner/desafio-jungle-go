@@ -44,8 +44,7 @@ Taken from the JWT `azp` (OAuth client id). If `azp` equals `OIDC_INTERNAL_CLIEN
 | `GET /providers/{providerId}/wagering/transactions/{externalTransactionId}` | Internal, or the provider whose `azp` equals the path `{providerId}` |
 | `GET /wagering/transactions/{transactionId}` | Internal: any row. Provider: own `providerId` only; otherwise `404` (no existence leak) |
 
-Financial handlers are implemented in Phase 5 ([wallets.md](wallets.md), [wagering.md](wagering.md),
-[status.md](status.md)).
+Financial handlers: [wallets.md](wallets.md), [wagering.md](wagering.md), [status.md](status.md).
 
 ## Status catalog (auth)
 

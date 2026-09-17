@@ -1,12 +1,12 @@
 # tec-go — Distributed wager processing
 
-Go + Uber Fx service that processes financial operations from game providers via HTTP and SQS, backed by
-PostgreSQL, Keycloak and LocalStack. Full challenge statement (in Portuguese) in [`init.md`](init.md).
+Go + Uber Fx service that processes financial operations from game providers (`BET`, `WIN`, `LOSS`,
+`REFUND`, `ROLLBACK`) via HTTP and SQS, backed by PostgreSQL, Keycloak and LocalStack. Full
+challenge statement (in Portuguese) in [`init.md`](init.md). Decisions:
+[`ARCHITECTURE.md`](ARCHITECTURE.md).
 
-> Phase 10: process skeleton, domain, financial persistence, OIDC, HTTP use cases, concurrent
-> outbox publisher, SQS inbound consumer (inbox + DLQ), pending-reference worker, multi-instance
-> tests, and **observability** (JSON correlation logs + Prometheus `/metrics`).
-> See [`docs/roadmap.md`](docs/roadmap.md).
+From a clean checkout, another person can start the stack, apply migrations, call authenticated
+endpoints and run the documented tests (ENT-01).
 
 ## Prerequisites
 
@@ -14,10 +14,12 @@ PostgreSQL, Keycloak and LocalStack. Full challenge statement (in Portuguese) in
 - **Docker** and **Docker Compose**
 - Optionally [golang-migrate](https://github.com/golang-migrate/migrate) CLI, only if you need to roll
   migrations back by hand
+- Optionally the AWS CLI (or `awslocal` inside the LocalStack container) for manual SQS examples
 
 ## Environment variables
 
-Copy [`.env.example`](.env.example) and adjust. Do not commit real secrets.
+Copy [`.env.example`](.env.example) and adjust. Do not commit real secrets. Values there are local
+dummies for a **host** process (`localhost` ports). Compose overrides them with service DNS names.
 
 | Variable | Purpose |
 | --- | --- |
@@ -29,6 +31,7 @@ Copy [`.env.example`](.env.example) and adjust. Do not commit real secrets.
 | `AWS_ACCESS_KEY_ID` | Static access key (LocalStack accepts any non-empty dummy) |
 | `AWS_SECRET_ACCESS_KEY` | Static secret key (dummy for LocalStack) |
 | `AWS_ENDPOINT_URL` | SQS endpoint (`http://localhost:4566` on the host; Compose-internal URL in Docker) |
+| `AWS_EC2_METADATA_DISABLED` | Set `true` locally so the SDK does not wait on EC2 IMDS |
 | `SQS_WAGER_QUEUE_NAME` | FIFO queue name: `wager-transactions.fifo` |
 | `SQS_WAGER_DLQ_NAME` | FIFO DLQ name: `wager-transactions-dlq.fifo` |
 | `SQS_EVENTS_QUEUE_NAME` | Outbox destination FIFO: `wager-events.fifo` |
@@ -54,13 +57,20 @@ Copy [`.env.example`](.env.example) and adjust. Do not commit real secrets.
 
 ## Running the environment
 
-From a clean checkout, start PostgreSQL, Keycloak, LocalStack (queues + redrive) and the app:
+From a clean checkout, start PostgreSQL, Keycloak (realm import), LocalStack (queues + redrive)
+and the app. The app applies migrations **Up** on start.
 
 ```sh
 docker compose up --build
 ```
 
-Wait until the app container is healthy (or until `GET /health/ready` returns 200 — see below).
+Wait until the app container is healthy (or until `GET /health/ready` returns 200).
+
+Three Compose replicas (ports `8080` / `8082` / `8083`):
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.instances.yml up --build
+```
 
 ### Running the binary on the host
 
@@ -73,23 +83,35 @@ go run ./cmd/wagering
 ```
 
 Use the host values in `.env.example` (`localhost` ports, not Docker DNS names). Service names and
-published ports are listed in [`docs/runbooks/test-dependencies.md`](docs/runbooks/test-dependencies.md).
+published ports: [`docs/runbooks/test-dependencies.md`](docs/runbooks/test-dependencies.md).
+
+A token obtained from `http://localhost:8081` has `iss` `http://localhost:8081/realms/wagering`
+and is rejected by the Compose app process (`http://keycloak:8080/realms/wagering`). Use host
+`.env.example` values when the binary runs on the host.
 
 ## SQS queues
 
-LocalStack is provisioned with inbound FIFO queues (redrive to the DLQ) and an outbound events queue:
+LocalStack is provisioned on start from [`docker/localstack/init-sqs.sh`](docker/localstack/init-sqs.sh):
 
 | Queue | Role |
 | --- | --- |
 | `wager-transactions.fifo` | Inbound wager operations (`SQS_WAGER_QUEUE_NAME`) |
-| `wager-transactions-dlq.fifo` | Dead-letter queue (`SQS_WAGER_DLQ_NAME`) |
+| `wager-transactions-dlq.fifo` | Dead-letter queue (`SQS_WAGER_DLQ_NAME`); redrive `maxReceiveCount=5` |
 | `wager-events.fifo` | Outbox publisher destination (`SQS_EVENTS_QUEUE_NAME`) |
 
+Confirm the queues exist:
+
+```sh
+docker compose exec -T localstack awslocal sqs get-queue-url --queue-name wager-transactions.fifo
+docker compose exec -T localstack awslocal sqs get-queue-url --queue-name wager-transactions-dlq.fifo
+docker compose exec -T localstack awslocal sqs get-queue-url --queue-name wager-events.fifo
+```
+
 The process consumes `wager-transactions.fifo` and publishes committed outbox rows to
-`wager-events.fifo`. Inbound contract: [`docs/events/inbound.md`](docs/events/inbound.md)
+`wager-events.fifo`. Inbound: [`docs/events/inbound.md`](docs/events/inbound.md)
 ([ADR 0017](docs/adr/0017-inbox-persistence.md), [ADR 0018](docs/adr/0018-sqs-inbound-consume.md)).
 Outbound: [ADR 0015](docs/adr/0015-outbox-destination-and-routing.md),
-[ADR 0016](docs/adr/0016-outbox-claim-and-backoff.md). Message contracts:
+[ADR 0016](docs/adr/0016-outbox-claim-and-backoff.md). Contracts:
 [`docs/events/README.md`](docs/events/README.md).
 
 ## Migrations
@@ -109,15 +131,15 @@ Rollback is **not** run on shutdown. Using the [golang-migrate CLI](https://gith
 migrate -path migrations -database "$POSTGRES_DSN" down 1
 ```
 
-If the CLI rejects the process DSN, switch the scheme to the postgres/pgx URL the driver expects, for
-example `postgres://user:pass@localhost:5432/dbname?sslmode=disable` or `pgx5://…` (golang-migrate v4).
-See [ADR 0003](docs/adr/0003-database-access-and-migrations.md).
+If the CLI rejects the process DSN, switch the scheme to the postgres/pgx URL the driver expects,
+for example `postgres://user:pass@localhost:5432/dbname?sslmode=disable` or `pgx5://…`
+(golang-migrate v4). See [ADR 0003](docs/adr/0003-database-access-and-migrations.md).
 
 ## Authentication and test identities
 
 Keycloak realm `wagering` is imported automatically from
 [`docker/keycloak/realm-wagering.json`](docker/keycloak/realm-wagering.json). Grant:
-`client_credentials`. Local dummy secrets:
+`client_credentials`. Local dummy secrets (not for production):
 
 | Client | Secret | Role |
 | --- | --- | --- |
@@ -125,25 +147,25 @@ Keycloak realm `wagering` is imported automatically from
 | `provider-a` | `provider-a-secret` | `providerId=provider-a` |
 | `provider-b` | `provider-b-secret` | `providerId=provider-b` |
 
-Audience: `wagering-api`. Contract: [`docs/api/auth.md`](docs/api/auth.md). Health and `/metrics` stay public.
+Audience: `wagering-api`. Admin console (local): `http://localhost:8081` (`admin` / `admin`).
+Contract: [`docs/api/auth.md`](docs/api/auth.md). Health and `/metrics` stay public.
+
+The examples below assume a **host** binary (`OIDC_ISSUER=http://localhost:8081/realms/wagering`).
+For the Compose `app` container, obtain tokens from `http://keycloak:8080` (for example
+`docker compose exec app …`) so `iss` matches.
 
 ```sh
 ACCESS_TOKEN=$(curl -sS -X POST http://localhost:8081/realms/wagering/protocol/openid-connect/token \
   -d grant_type=client_credentials \
   -d client_id=provider-a \
   -d client_secret=provider-a-secret | python3 -c 'import json,sys; print(json.load(sys.stdin)["access_token"])')
-curl -sS http://localhost:8080/providers/provider-a/wagering/transactions/tx-1 \
-  -H "Authorization: Bearer $ACCESS_TOKEN"
 ```
-
-A token obtained from `http://localhost:8081` has `iss` `http://localhost:8081/realms/wagering`
-and is rejected by the Compose app process, which is configured with
-`http://keycloak:8080/realms/wagering`. Use host `.env.example` values when running the binary on
-the host.
 
 ## Example calls
 
-With `HTTP_ADDR=:8080` (adjust host/port to match Compose or `.env.example`):
+With `HTTP_ADDR=:8080`. Full HTTP contracts: [`docs/api/`](docs/api/).
+
+### Health and metrics
 
 ```sh
 curl -sS http://localhost:8080/health/live
@@ -161,21 +183,83 @@ Business HTTP echoes `X-Correlation-Id` (UUID v7 if the client omits it). JSON l
 `correlationId` / `providerId` / `transactionId` / `walletId` / `messageId` when known; they
 never include Bearer tokens or money amounts ([ADR 0021](docs/adr/0021-observability-logs-and-metrics.md)).
 
-Full contract: [`docs/api/health.md`](docs/api/health.md), [`docs/api/metrics.md`](docs/api/metrics.md).
-Business routes require a Bearer token
-([`docs/api/auth.md`](docs/api/auth.md)). Wallets: [`docs/api/wallets.md`](docs/api/wallets.md).
-Operations: [`docs/api/wagering.md`](docs/api/wagering.md).
+### Open a wallet, bet, read, reconcile
 
 ```sh
 INTERNAL_TOKEN=$(curl -sS -X POST http://localhost:8081/realms/wagering/protocol/openid-connect/token \
   -d grant_type=client_credentials -d client_id=wagering-internal -d client_secret=internal-secret \
   | python3 -c 'import json,sys; print(json.load(sys.stdin)["access_token"])')
-curl -sS -X POST http://localhost:8080/wallets \
+PROVIDER_TOKEN=$(curl -sS -X POST http://localhost:8081/realms/wagering/protocol/openid-connect/token \
+  -d grant_type=client_credentials -d client_id=provider-a -d client_secret=provider-a-secret \
+  | python3 -c 'import json,sys; print(json.load(sys.stdin)["access_token"])')
+
+WALLET=$(curl -sS -X POST http://localhost:8080/wallets \
   -H "Authorization: Bearer $INTERNAL_TOKEN" -H "Content-Type: application/json" \
-  -d '{"playerId":"0192f28f-5dc0-7d58-bdb2-814ad6a0f4a1","initialBalance":{"amount":"1000.00","currency":"BRL"}}'
+  -H "X-Correlation-Id: demo-open-wallet" \
+  -d '{"playerId":"player-demo-1","initialBalance":{"amount":"1000.00","currency":"BRL"}}')
+echo "$WALLET"
+WALLET_ID=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])' <<<"$WALLET")
+PLAYER=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["playerId"])' <<<"$WALLET")
+
+curl -sS -X POST http://localhost:8080/wagering/transactions \
+  -H "Authorization: Bearer $PROVIDER_TOKEN" -H "Content-Type: application/json" \
+  -H "Idempotency-Key: provider-a:bet-demo-1" \
+  -d "{\"providerId\":\"provider-a\",\"externalTransactionId\":\"bet-demo-1\",\"playerId\":\"${PLAYER}\",\"walletId\":\"${WALLET_ID}\",\"roundId\":\"round-1\",\"gameId\":\"fortune-chimp\",\"kind\":\"BET\",\"money\":{\"amount\":\"25.00\",\"currency\":\"BRL\"}}"
+
+curl -sS "http://localhost:8080/providers/provider-a/wagering/transactions/bet-demo-1" \
+  -H "Authorization: Bearer $PROVIDER_TOKEN"
+
+curl -sS "http://localhost:8080/wallets/${WALLET_ID}/ledger" \
+  -H "Authorization: Bearer $INTERNAL_TOKEN"
+
+curl -sS -X POST "http://localhost:8080/wallets/${WALLET_ID}/reconciliation" \
+  -H "Authorization: Bearer $INTERNAL_TOKEN"
 ```
 
-Use host `.env.example` issuer/ports when the binary runs on the host (not the Compose-internal Keycloak URL).
+Expected: wallet `201` with `"1000.00"`; BET `200` `PROCESSED` balance `"975.00"`; replay of the
+same `Idempotency-Key` returns `idempotentReplay: true` without a second debit; reconciliation
+`consistent: true`.
+
+`REFUND` / `ROLLBACK` before the referenced BET returns `202` `PENDING_REFERENCE`. Procedure:
+[`docs/runbooks/pending-references.md`](docs/runbooks/pending-references.md).
+
+### Inbound SQS
+
+Same use case and idempotency as HTTP ([`docs/events/inbound.md`](docs/events/inbound.md)).
+`MessageGroupId` is the wallet id; `MessageDeduplicationId` is envelope `messageId`.
+
+```sh
+BODY=$(WALLET_ID="$WALLET_ID" PLAYER="$PLAYER" python3 - <<'PY'
+import json, os
+print(json.dumps({
+  "messageId": "msg-bet-demo-sqs-1",
+  "type": "WagerTransactionRequested",
+  "occurredAt": "2026-09-17T12:00:00.000Z",
+  "data": {
+    "providerId": "provider-a",
+    "externalTransactionId": "bet-demo-sqs-1",
+    "idempotencyKey": "provider-a:bet-demo-sqs-1",
+    "playerId": os.environ["PLAYER"],
+    "walletId": os.environ["WALLET_ID"],
+    "roundId": "round-1",
+    "gameId": "fortune-chimp",
+    "kind": "BET",
+    "money": {"amount": "10.00", "currency": "BRL"}
+  }
+}))
+PY
+)
+QUEUE_URL=$(docker compose exec -T localstack awslocal sqs get-queue-url \
+  --queue-name wager-transactions.fifo --query QueueUrl --output text)
+docker compose exec -T localstack awslocal sqs send-message \
+  --queue-url "$QUEUE_URL" \
+  --message-group-id "$WALLET_ID" \
+  --message-deduplication-id "msg-bet-demo-sqs-1" \
+  --message-body "$BODY"
+```
+
+Poll `GET /providers/provider-a/wagering/transactions/bet-demo-sqs-1` until `PROCESSED`. Published
+events land on `wager-events.fifo`.
 
 ## Tests
 
@@ -188,19 +272,20 @@ go vet ./...
 gofmt -l .
 ```
 
-`gofmt -l .` must print nothing.
+`gofmt -l .` must print nothing. Dependencies are pinned in `go.mod` / `go.sum`.
 
 Integration tests use build tag `integration`. They skip if required env is unset (`skip-if-no-env`).
 That skip is not a substitute for CI with real containers.
 
 **TST-04** (postgres migrations, constraints, ledger immutability, financial atomicity) and
-**Phase 5 HTTP** (`TestHTTPPhase5UseCases`, concurrency) need `POSTGRES_DSN` only. **Phase 6 outbox**
+**HTTP use cases** (`TestHTTPPhase5UseCases`, concurrency) need `POSTGRES_DSN` only. **Outbox**
 (`TestOutbox*` in `internal/adapter/postgres`) needs `POSTGRES_DSN` plus LocalStack
 (`AWS_ENDPOINT_URL` and AWS dummy keys) for publish tests; claim/SKIP LOCKED tests need Postgres
-only. **Phase 7 inbound** (`TestInbound*` in `internal/adapter/postgres`) needs `POSTGRES_DSN` and
-LocalStack. **Phase 8 pending** (`TestPending*` in `internal/adapter/postgres`) needs `POSTGRES_DSN`
-only. **Phase 9 multi-instance** (`TestInstances*` in `internal/composition`) needs Postgres,
-Keycloak and LocalStack (`POSTGRES_DSN`, `OIDC_ISSUER`, `AWS_ENDPOINT_URL`). **TST-07** (auth against the real IdP) needs Keycloak and `OIDC_ISSUER`:
+only. **Inbound** (`TestInbound*` in `internal/adapter/postgres`) needs `POSTGRES_DSN` and
+LocalStack. **Pending** (`TestPending*` in `internal/adapter/postgres`) needs `POSTGRES_DSN`
+only. **Multi-instance** (`TestInstances*` in `internal/composition`) needs Postgres,
+Keycloak and LocalStack (`POSTGRES_DSN`, `OIDC_ISSUER`, `AWS_ENDPOINT_URL`). **TST-07** (auth
+against the real IdP) needs Keycloak and `OIDC_ISSUER`:
 
 ```sh
 docker compose up -d postgres keycloak localstack
@@ -208,14 +293,16 @@ set -a && source .env.example && set +a
 go test -tags=integration ./...
 ```
 
-How to run TST-04: [`docs/runbooks/integration.md`](docs/runbooks/integration.md). Starting
+How to run tagged tests: [`docs/runbooks/integration.md`](docs/runbooks/integration.md). Starting
 dependencies: [`docs/runbooks/test-dependencies.md`](docs/runbooks/test-dependencies.md). Strategy:
 [ADR 0005](docs/adr/0005-test-strategy-initial.md). Three processes:
 [`docs/runbooks/multiple-instances.md`](docs/runbooks/multiple-instances.md)
 ([ADR 0020](docs/adr/0020-multi-instance-and-failure-injection.md)). Crashes and dependency loss:
-[`docs/runbooks/failure-simulation.md`](docs/runbooks/failure-simulation.md).
+[`docs/runbooks/failure-simulation.md`](docs/runbooks/failure-simulation.md). Pending references:
+[`docs/runbooks/pending-references.md`](docs/runbooks/pending-references.md).
 
 ## Documentation
 
-- [`ARCHITECTURE.md`](ARCHITECTURE.md) — technical decisions
-- [`docs/`](docs/) — ADRs, HTTP/event contracts, runbooks and traceability
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) — technical decisions, limitations, interpretations
+- [`docs/`](docs/) — ADRs, HTTP/event contracts, runbooks and the traceability matrix
+- [`.env.example`](.env.example) — local dummy values, no real secrets

@@ -1,20 +1,13 @@
 # HTTP contracts
 
-Documentation for the endpoints exposed by the service (`init.md` §9). One file per resource group once
-content grows; this README keeps the index and shared conventions.
+Documentation for the endpoints exposed by the service (`init.md` §9). One file per resource group.
+This README is the index.
 
-## Expected contents
+Health probes and `GET /metrics` stay public. Every other registered route requires a Bearer token.
 
-- Authentication required per endpoint (scope/role/client) and public endpoints (`/health/*`).
-- Request and response for each endpoint, with examples.
-- HTTP status catalog and a standardized error body, distinguishing:
-  invalid input · conflict (idempotency/duplicate) · business rejection · pending processing ·
-  transient unavailability · unauthenticated · unauthorized.
-- `failureCode` catalog: code, meaning, correctable × definitive, associated HTTP status.
-- `Idempotency-Key` rules, canonical hash algorithm and normalizations.
-- Ledger pagination (opaque cursor, ordering, limits).
-
-Phase 5 implements the financial handlers. Health probes stay public.
+Shared conventions live in the files below: authentication per route, request/response examples,
+HTTP status catalog, `failureCode` catalog (correctable × definitive), `Idempotency-Key` / canonical
+hash, and ledger pagination (opaque cursor, ordering, limits).
 
 ## Index
 
