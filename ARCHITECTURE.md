@@ -37,7 +37,7 @@ migrations/
 
 Details: [ADR 0001](docs/adr/0001-package-layout-and-layer-boundaries.md).
 `cmd/loadtest` is optional operator tooling (`go run ./cmd/loadtest`); it is not the Fx process
-([ADR 0022](docs/adr/0022-load-test-harness.md) Proposed).
+([ADR 0022](docs/adr/0022-load-test-harness.md)).
 
 ## Money (`Money`)
 
@@ -205,14 +205,17 @@ HTTP statuses: [ADR 0013](docs/adr/0013-http-status-mapping.md), [`docs/api/stat
 
 **Tracing:** not implemented (optional OBS-03).
 
+**Load tests:** optional host command `go run ./cmd/loadtest` ([ADR 0022](docs/adr/0022-load-test-harness.md)).
+Closed authenticated HTTP bursts against a process that is already running. JSON stdout reports
+throughput, p50/p95/p99, errors, conflict counters and outbox lag; exit 0 only when financial
+invariants hold and unpublished outbox rows drain. No RPS goal. Runbook:
+[`docs/runbooks/load-test.md`](docs/runbooks/load-test.md).
+
 ## Limitations, interpretations and unfinished work
 
 ### Unfinished / out of scope
 
 - OpenTelemetry tracing and dashboards (OBS-03) — optional in `init.md` §12 / §14; not implemented.
-- Load tests — optional differential (`init.md` §14). Harness: `go run ./cmd/loadtest`
-  ([docs/runbooks/load-test.md](docs/runbooks/load-test.md)). [ADR 0022](docs/adr/0022-load-test-harness.md)
-  is **Proposed**. There is no RPS goal; burst throughput is not a capacity SLO.
 - Double-entry bookkeeping (“partidas dobradas”) — optional differential; the ledger is
   append-only credit/debit entries, not a paired double-entry chart of accounts.
 - `sqlc` was considered and not chosen ([ADR 0003](docs/adr/0003-database-access-and-migrations.md)).

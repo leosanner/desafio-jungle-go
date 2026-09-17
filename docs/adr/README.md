@@ -30,7 +30,7 @@ Accepted ADRs are not rewritten: a change of direction creates a new ADR that su
 | [0019](0019-pending-reference-resume.md) | Pending-reference worker, backoff, TTL and PENDING resume | Accepted |
 | [0020](0020-multi-instance-and-failure-injection.md) | Multi-instance verification and failure injection | Accepted |
 | [0021](0021-observability-logs-and-metrics.md) | Observability: correlation logs and Prometheus metrics | Accepted |
-| [0022](0022-load-test-harness.md) | Optional load-test harness as a host Go command | Proposed |
+| [0022](0022-load-test-harness.md) | Optional load-test harness as a host Go command | Accepted |
 
 ## Recorded decisions
 
@@ -53,4 +53,4 @@ All challenge-required technical choices have an accepted ADR:
 - [x] Logs, metrics and (optional) tracing — JSON `log/slog` + correlation + Prometheus catalog in [ADR 0021](0021-observability-logs-and-metrics.md); tracing skipped
 - [x] Fx lifecycle and shutdown strategy
 - [x] Test strategy: build tags, containers, multiple instances and failure injection
-- [ ] Optional load-test harness (`go run ./cmd/loadtest`) — [ADR 0022](0022-load-test-harness.md) Proposed
+- [x] Optional load-test harness (`go run ./cmd/loadtest`) — [ADR 0022](0022-load-test-harness.md)

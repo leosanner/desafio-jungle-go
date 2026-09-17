@@ -18,4 +18,4 @@ Each runbook must include: prerequisites, exact commands, expected outcome and h
 | [load-test.md](load-test.md) | Optional burst: throughput, p50/p95/p99, conflicts, outbox lag | ✅ |
 
 Load tests are an optional differential in `init.md` §14. Command: `go run ./cmd/loadtest`.
-There is no RPS goal. [ADR 0022](../adr/0022-load-test-harness.md) (Proposed).
+There is no RPS goal. [ADR 0022](../adr/0022-load-test-harness.md).

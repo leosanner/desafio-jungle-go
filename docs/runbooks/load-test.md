@@ -1,7 +1,7 @@
 # Load test
 
-Optional differential (`init.md` §14). Decision: [ADR 0022](../adr/0022-load-test-harness.md)
-(Proposed). There is **no RPS goal**. A passing run means financial invariants held and the
+Optional differential (`init.md` §14). Decision: [ADR 0022](../adr/0022-load-test-harness.md).
+There is **no RPS goal**. A passing run means financial invariants held and the
 outbox drained, not a capacity SLO.
 
 Correctness under concurrency is still proven by tagged tests

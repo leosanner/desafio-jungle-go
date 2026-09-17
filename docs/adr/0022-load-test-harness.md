@@ -1,6 +1,6 @@
 # 0022 — Optional load-test harness as a host Go command
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-09-17
 - **Related requirements:** `init.md` §14 (optional load tests: reproducible command, environment,
   methodology, throughput, p50/p95/p99, errors, conflicts, outbox lag; no RPS goal); ENT-07

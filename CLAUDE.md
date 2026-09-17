@@ -88,7 +88,7 @@ migrate -path migrations -database "$POSTGRES_DSN" down 1
   (`TestPending*`) need `POSTGRES_DSN` only. Phase 9 multi-instance tests (`TestInstances*`) need
   `POSTGRES_DSN`, `OIDC_ISSUER` and LocalStack (`AWS_ENDPOINT_URL`). TST-07 needs `OIDC_ISSUER` and a
   running Keycloak with the imported `wagering` realm. Optional load burst: `go run ./cmd/loadtest`
-  against a ready process ([docs/runbooks/load-test.md](docs/runbooks/load-test.md); [ADR 0022](docs/adr/0022-load-test-harness.md) Proposed).
+  against a ready process ([docs/runbooks/load-test.md](docs/runbooks/load-test.md); [ADR 0022](docs/adr/0022-load-test-harness.md)).
 
 ## Current state
 
@@ -98,7 +98,7 @@ and payload redaction plus a Prometheus catalog on public `GET /metrics` remain 
 ([ADR 0021](docs/adr/0021-observability-logs-and-metrics.md)). Multi-instance proof (`TestInstances*`),
 transactional inbox + SQS consume, pending-reference `SKIP LOCKED`, HTTP use cases, domain,
 persistence, OIDC and the outbox publisher remain. Tracing and double-entry bookkeeping are
-optional extras and are not implemented. Load tests ship as `go run ./cmd/loadtest` with
-[ADR 0022](docs/adr/0022-load-test-harness.md) Proposed. Decisions:
-[ADR 0001](docs/adr/0001-package-layout-and-layer-boundaries.md)–[0021](docs/adr/0021-observability-logs-and-metrics.md)
+optional extras and are not implemented. Load tests ship as `go run ./cmd/loadtest`
+([ADR 0022](docs/adr/0022-load-test-harness.md)). Decisions:
+[ADR 0001](docs/adr/0001-package-layout-and-layer-boundaries.md)–[0022](docs/adr/0022-load-test-harness.md)
 (accepted).
