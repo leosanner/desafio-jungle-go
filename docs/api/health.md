@@ -80,3 +80,4 @@ publishes to the events queue.
 ## Authentication
 
 None. Both endpoints are public. Business routes require OIDC ([auth.md](auth.md)); these probes stay public.
+Prometheus scrape is also public: [`metrics.md`](metrics.md).

@@ -5,11 +5,12 @@
 
 ## Overview
 
-Phase 9 of a Go + Uber Fx wagering service: hexagonal layout, stdlib HTTP, PostgreSQL via `pgx`,
+Phase 10 of a Go + Uber Fx wagering service: hexagonal layout, stdlib HTTP, PostgreSQL via `pgx`,
 golang-migrate, LocalStack SQS queues, a **pure domain model**, **financial persistence**, **OIDC
 authentication**, **HTTP use cases**, a **concurrent outbox publisher**, an **SQS inbound
-consumer** with a transactional inbox, a **pending-reference worker**, and **multi-instance**
-verification (three OS processes plus failure runbooks).
+consumer** with a transactional inbox, a **pending-reference worker**, **multi-instance**
+verification (three OS processes plus failure runbooks), and **observability** (JSON logs with
+correlation IDs plus a Prometheus metrics catalog).
 
 - Module: `github.com/leosanner/desafio-jungle-go` ([ADR 0001](docs/adr/0001-package-layout-and-layer-boundaries.md))
 - Go 1.25, `net/http` ServeMux, `log/slog` JSON ([ADR 0002](docs/adr/0002-go-version-and-http-router.md))
@@ -29,6 +30,7 @@ internal/adapter/http
 internal/adapter/postgres
 internal/adapter/sqs
 internal/adapter/auth
+internal/adapter/metrics
 internal/composition/
 migrations/
 ```
@@ -186,23 +188,28 @@ SQS is gated by AWS credentials (LocalStack dummies in Compose). The inbound con
 
 ## Observability
 
-**Logs (accepted):** `log/slog` with a JSON handler; level from `LOG_LEVEL`
-([ADR 0002](docs/adr/0002-go-version-and-http-router.md)). Do not log credentials, secrets or full
-financial payloads.
+**Logs (proposed):** `log/slog` JSON ([ADR 0002](docs/adr/0002-go-version-and-http-router.md)) with
+`X-Correlation-Id` (generated UUID v7 when missing) and identifier fields `correlationId`,
+`providerId`, `transactionId`, `walletId`, `messageId` when known. A key denylist redacts
+credentials and financial payload fields ([ADR 0021](docs/adr/0021-observability-logs-and-metrics.md)).
+
+**Metrics (proposed):** `app.Metrics` port; Prometheus adapter (`prometheus/client_golang`) on a
+private registry. Public `GET /metrics`. Catalog: [`docs/api/metrics.md`](docs/api/metrics.md).
+Outbox lag is unpublished row count and oldest `occurred_at`. HTTP labels use ServeMux patterns,
+not raw ids.
 
 **Health:** public `GET /health/live` and `GET /health/ready` (PostgreSQL + SQS; ready fails during
 shutdown). [`docs/api/health.md`](docs/api/health.md).
 
 HTTP statuses: [ADR 0013](docs/adr/0013-http-status-mapping.md), [`docs/api/status.md`](docs/api/status.md).
 
-Reconciliation divergences are logged (`walletId`, entry count, no full payload) and counted via
-`app.Metrics`. Broader metrics and tracing — _TBD_
+**Tracing:** not implemented (optional OBS-03).
 
 ## Limitations, interpretations and unfinished work
 
-Phase 9 adds three-process tests and failure runbooks. Still unfinished:
+Phase 10 adds JSON correlation logs and a Prometheus catalog. Still unfinished:
 
-- ADRs 0006–0020 are **Proposed** until confirmed.
+- ADRs 0006–0021 are **Proposed** until confirmed.
 - STK-05 is documented and implemented: `pgx/v5` ([ADR 0003](docs/adr/0003-database-access-and-migrations.md)),
   `BIGINT` minor units ([ADR 0006](docs/adr/0006-money-representation.md), migration `000002`),
   unit of work ([ADR 0009](docs/adr/0009-sql-unit-of-work.md)), outbox insert ([ADR 0014](docs/adr/0014-outbox-persistence.md),
@@ -218,8 +225,10 @@ Phase 9 adds three-process tests and failure runbooks. Still unfinished:
   `TestPendingCommittedPendingResumed` (`POSTGRES_DSN` only).
   Phase 9 instances: `TestInstances*` (`POSTGRES_DSN` + Keycloak + LocalStack,
   [ADR 0020](docs/adr/0020-multi-instance-and-failure-injection.md)).
-- Health endpoints stay public.
-- Observability (correlation fields, metrics catalog, tracing) is Phase 10.
+  Phase 10 observability: `TestCorrelationIDEchoedAndLogged`, `TestSubmitRecordsDuplicatesAndConflicts`,
+  `TestPrometheusCatalogAndScrape`, `TestOutboxLagUnpublishedAndCleared` ([ADR 0021](docs/adr/0021-observability-logs-and-metrics.md)).
+- Health and `GET /metrics` stay public. Tracing (OBS-03) is not implemented.
+- Delivery polish (README examples, final audit, accept ADRs) is Phase 11.
 
 Interpretations: migrate Up on process start; rollback is operator-driven via CLI; default
 `go test ./...` never requires Docker; `"25"` / `"25.0"` are rejected as money input (no

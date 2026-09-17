@@ -6,7 +6,7 @@ OIDC resource-server behaviour (`init.md` §2 and §9). Decision: [ADR 0011](../
 
 ## Public routes
 
-[`GET /health/live`](health.md) and [`GET /health/ready`](health.md) stay unauthenticated.
+[`GET /health/live`](health.md), [`GET /health/ready`](health.md) and [`GET /metrics`](metrics.md) stay unauthenticated.
 
 Every other registered route requires `Authorization: Bearer <access_token>`.
 

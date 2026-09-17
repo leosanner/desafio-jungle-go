@@ -15,5 +15,5 @@ decisions made. The order prioritizes the highest-weighted criteria (§14) and m
 | 7 | SQS consumer with inbox, retry and DLQ | SQS, INB, TST-12 | ✅ |
 | 8 | Pending references and `PENDING` resumption | OPS-10..12, WTX-04, TST-14/15 | ✅ |
 | 9 | Multiple instances and failure simulation | CON-02, TST-11, runbooks | ✅ |
-| 10 | Observability: logs, metrics | OBS | — |
+| 10 | Observability: logs, metrics | OBS | ✅ |
 | 11 | Delivery: README, ARCHITECTURE, `.env.example`, final audit | ENT, ELIM | — |

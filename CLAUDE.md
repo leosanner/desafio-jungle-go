@@ -74,7 +74,8 @@ migrate -path migrations -database "$POSTGRES_DSN" down 1
 
 - The app applies migrations **Up** on start. Rollback is CLI-only (not on shutdown).
 - Health: `curl -sS http://localhost:8080/health/live` and `/health/ready` (port from `HTTP_ADDR`).
-  Business routes need `Authorization: Bearer` ([docs/api/auth.md](docs/api/auth.md)).
+  Metrics: `curl -sS http://localhost:8080/metrics` (public). Business routes need `Authorization: Bearer`
+  ([docs/api/auth.md](docs/api/auth.md)).
 - Default `go test ./...` is unit tests only (no containers). `-tags=integration` is for real
   PostgreSQL / Keycloak / LocalStack when those tests exist ([ADR 0005](docs/adr/0005-test-strategy-initial.md)).
   TST-04 postgres tests need `POSTGRES_DSN` only (Keycloak/SQS not required). HTTP Phase 5
@@ -89,10 +90,11 @@ migrate -path migrations -database "$POSTGRES_DSN" down 1
 
 ## Current state
 
-Phase 9 multi-instance proof is in place: tagged tests spawn three `cmd/wagering` processes
-(`TestInstances*`); runbooks cover replicas and failure injection. Transactional inbox + SQS
-consume remain from Phase 7; `PENDING` / `PENDING_REFERENCE` rows are claimed with `SKIP LOCKED`.
-HTTP use cases, domain, persistence, OIDC and the outbox publisher remain. **No metrics catalog yet.**
+Phase 10 observability is in place: JSON `slog` with correlation IDs and payload redaction;
+Prometheus catalog on public `GET /metrics` ([ADR 0021](docs/adr/0021-observability-logs-and-metrics.md)).
+Phase 9 multi-instance proof remains (`TestInstances*`). Transactional inbox + SQS consume remain
+from Phase 7; `PENDING` / `PENDING_REFERENCE` rows are claimed with `SKIP LOCKED`. HTTP use cases,
+domain, persistence, OIDC and the outbox publisher remain. Tracing is not implemented.
 Decisions: [ADR 0001](docs/adr/0001-package-layout-and-layer-boundaries.md)–[0005](docs/adr/0005-test-strategy-initial.md)
-(accepted); [ADR 0006](docs/adr/0006-money-representation.md)–[0020](docs/adr/0020-multi-instance-and-failure-injection.md)
-(proposed). Next: Phase 10 observability.
+(accepted); [ADR 0006](docs/adr/0006-money-representation.md)–[0021](docs/adr/0021-observability-logs-and-metrics.md)
+(proposed). Next: Phase 11 delivery.

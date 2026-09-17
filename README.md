@@ -3,9 +3,9 @@
 Go + Uber Fx service that processes financial operations from game providers via HTTP and SQS, backed by
 PostgreSQL, Keycloak and LocalStack. Full challenge statement (in Portuguese) in [`init.md`](init.md).
 
-> Phase 9: process skeleton, domain, financial persistence, OIDC, HTTP use cases, concurrent
-> outbox publisher, SQS inbound consumer (inbox + DLQ), pending-reference worker, and
-> **multi-instance** tests plus failure runbooks.
+> Phase 10: process skeleton, domain, financial persistence, OIDC, HTTP use cases, concurrent
+> outbox publisher, SQS inbound consumer (inbox + DLQ), pending-reference worker, multi-instance
+> tests, and **observability** (JSON correlation logs + Prometheus `/metrics`).
 > See [`docs/roadmap.md`](docs/roadmap.md).
 
 ## Prerequisites
@@ -125,7 +125,7 @@ Keycloak realm `wagering` is imported automatically from
 | `provider-a` | `provider-a-secret` | `providerId=provider-a` |
 | `provider-b` | `provider-b-secret` | `providerId=provider-b` |
 
-Audience: `wagering-api`. Contract: [`docs/api/auth.md`](docs/api/auth.md). Health endpoints stay public.
+Audience: `wagering-api`. Contract: [`docs/api/auth.md`](docs/api/auth.md). Health and `/metrics` stay public.
 
 ```sh
 ACCESS_TOKEN=$(curl -sS -X POST http://localhost:8081/realms/wagering/protocol/openid-connect/token \
@@ -148,13 +148,21 @@ With `HTTP_ADDR=:8080` (adjust host/port to match Compose or `.env.example`):
 ```sh
 curl -sS http://localhost:8080/health/live
 curl -sS -o /tmp/ready.json -w "%{http_code}\n" http://localhost:8080/health/ready
+curl -sS http://localhost:8080/metrics | head
 ```
 
 - Live: `200` and `{"status":"ok"}` while the process can serve HTTP.
 - Ready: `200` and `{"status":"ok"}` when PostgreSQL and SQS pass checks; `503` otherwise,
   including once shutdown has started.
+- Metrics: Prometheus text (`wagering_*`). Public, like health. Catalog:
+  [`docs/api/metrics.md`](docs/api/metrics.md).
 
-Full contract: [`docs/api/health.md`](docs/api/health.md). Business routes require a Bearer token
+Business HTTP echoes `X-Correlation-Id` (UUID v7 if the client omits it). JSON logs include
+`correlationId` / `providerId` / `transactionId` / `walletId` / `messageId` when known; they
+never include Bearer tokens or money amounts ([ADR 0021](docs/adr/0021-observability-logs-and-metrics.md)).
+
+Full contract: [`docs/api/health.md`](docs/api/health.md), [`docs/api/metrics.md`](docs/api/metrics.md).
+Business routes require a Bearer token
 ([`docs/api/auth.md`](docs/api/auth.md)). Wallets: [`docs/api/wallets.md`](docs/api/wallets.md).
 Operations: [`docs/api/wagering.md`](docs/api/wagering.md).
 

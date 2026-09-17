@@ -30,6 +30,9 @@ and LocalStack. They build `cmd/wagering` and start three OS processes ([ADR 002
 Runbook: [`multiple-instances.md`](multiple-instances.md). Failure windows:
 [`failure-simulation.md`](failure-simulation.md).
 
+Phase 10 observability unit tests do not need containers. Outbox lag SQL (`TestOutboxLagUnpublishedAndCleared`)
+needs `POSTGRES_DSN` only.
+
 OIDC tests (TST-07) use the same tag and a real Keycloak with realm `wagering` imported.
 
 ## Prerequisites

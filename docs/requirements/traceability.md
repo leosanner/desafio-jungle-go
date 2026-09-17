@@ -139,7 +139,7 @@ the `spec-audit` skill or when completing a deliverable.
 | HTTP-09 | Same `(providerId, externalTransactionId)` cannot be re-applied under another key | ✅ | `CheckExternalIdentity`; unique index; `TestSubmitReplayAndConflicts`; `TestHTTPPhase5UseCases` | |
 | HTTP-10 | Documented statuses and bodies: invalid, conflict, rejection, pending, unavailable | ✅ | [status.md](../api/status.md); [ADR 0013](../adr/0013-http-status-mapping.md) | |
 | HTTP-11 | `POST /wallets/:walletId/reconciliation` on a consistent snapshot, without changing the balance | ✅ | `ReconcileWallet` + `FOR UPDATE` + `SumByWallet`; `TestReconcileWalletConsistent`; `TestHTTPPhase5UseCases` | |
-| HTTP-12 | Divergence reported in response, logs and a metric | ✅ | `consistent` field; HTTP warn log; `Metrics.IncReconciliationDivergence` | Full metrics catalog Phase 10 |
+| HTTP-12 | Divergence reported in response, logs and a metric | ✅ | `consistent` field; HTTP warn log; `wagering_reconciliation_divergences_total` ([metrics.md](../api/metrics.md)); `TestReconcileDivergenceIncrementsMetric` | |
 | HTTP-13 | `GET /health/live` and `GET /health/ready` (PostgreSQL and SQS) | ✅ | `internal/adapter/http/health.go`; `health_test.go`; [docs/api/health.md](../api/health.md) | Public; ready probes postgres + both SQS queues; 503 on shutdown |
 
 ## SQS (§10)
@@ -172,9 +172,9 @@ the `spec-audit` skill or when completing a deliverable.
 
 | ID | Requirement | Status | Evidence | Notes |
 | --- | --- | --- | --- | --- |
-| OBS-01 | JSON logs with correlation IDs, no credentials or full payloads | 🚧 | [ADR 0002](../adr/0002-go-version-and-http-router.md) (`log/slog` JSON, `LOG_LEVEL`) | Correlation IDs on business logs and redaction on financial paths not implemented |
-| OBS-02 | Metrics: status, duplicates, retries, DLQ, conflicts, outbox lag, latency, reconciliation | 🚧 | `Metrics.IncReconciliationDivergence` on `ReconcileWallet`. Remainder Phase 10 | |
-| OBS-03 | (Optional) OpenTelemetry tracing / dashboards | — | | |
+| OBS-01 | JSON logs with correlation IDs, no credentials or full payloads | ✅ | [ADR 0021](../adr/0021-observability-logs-and-metrics.md); `X-Correlation-Id` middleware (`internal/adapter/http/observe.go`); SQS `messageId` as correlation; `config.RedactLogAttr`; `TestCorrelationIDEchoedAndLogged` | |
+| OBS-02 | Metrics: status, duplicates, retries, DLQ, conflicts, outbox lag, latency, reconciliation | ✅ | `app.Metrics` + Prometheus (`internal/adapter/metrics`); public `GET /metrics` ([metrics.md](../api/metrics.md)); `TestSubmitRecordsDuplicatesAndConflicts`, `TestConsumerInvalidMessageIncrementsDLQ`, `TestOutboxLagUnpublishedAndCleared`, `TestPrometheusCatalogAndScrape` | |
+| OBS-03 | (Optional) OpenTelemetry tracing / dashboards | — | Explicitly skipped in [ADR 0021](../adr/0021-observability-logs-and-metrics.md) | |
 
 ## Verification (§13)
 
@@ -204,10 +204,10 @@ the `spec-audit` skill or when completing a deliverable.
 | ID | Requirement | Status | Evidence | Notes |
 | --- | --- | --- | --- | --- |
 | ENT-01 | Reproducible from a clean checkout | 🚧 | [README](../../README.md) | Phase 1 instructions written; Compose/image/binary owned by other agents |
-| ENT-02 | README: prerequisites, env, queues, migrations, running, examples, tests | 🚧 | [README.md](../../README.md) | Phase 8 pending worker documented; observability later |
+| ENT-02 | README: prerequisites, env, queues, migrations, running, examples, tests | 🚧 | [README.md](../../README.md) | Phase 10 `/metrics` and log fields documented; delivery polish Phase 11 |
 | ENT-03 | `.env.example` without real secrets | ✅ | `.env.example` | Local dummy keys only |
 | ENT-04 | Automatic IdP provisioning and test identities | ✅ | `docker/keycloak/realm-wagering.json`; Compose `--import-realm`; [auth.md](../api/auth.md); [README](../../README.md) Authentication | Local dummy client secrets |
-| ENT-05 | ARCHITECTURE.md with decisions, limitations, interpretations and unfinished work | 🚧 | [ARCHITECTURE.md](../../ARCHITECTURE.md); [docs/adr/](../adr/) | Phase 8 worker summarized; ADRs 0006–0019 Proposed |
+| ENT-05 | ARCHITECTURE.md with decisions, limitations, interpretations and unfinished work | 🚧 | [ARCHITECTURE.md](../../ARCHITECTURE.md); [docs/adr/](../adr/) | Phase 10 observability summarized; ADRs 0006–0021 Proposed |
 | ENT-06 | `docker compose up --build`, `go test ./...`, `go test -race ./...`, `go vet ./...` | ✅ | [README](../../README.md); Compose stack healthy; unit/`vet`/`-race` pass | |
 | ENT-07 | Separate docs: test dependencies, integration, multiple instances, failures, build tags | 🚧 | [test-dependencies.md](../runbooks/test-dependencies.md); [integration.md](../runbooks/integration.md); [multiple-instances.md](../runbooks/multiple-instances.md); [failure-simulation.md](../runbooks/failure-simulation.md); [ADR 0005](../adr/0005-test-strategy-initial.md), [ADR 0020](../adr/0020-multi-instance-and-failure-injection.md) | Pending-reference operator runbook and optional load test still later |
 | ENT-08 | `gofmt`-formatted code and reproducible dependencies | 🚧 | [ADR 0005](../adr/0005-test-strategy-initial.md); `gofmt -l .` in README | Domain added in Phase 2 |
