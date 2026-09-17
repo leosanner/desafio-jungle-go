@@ -90,11 +90,12 @@ migrate -path migrations -database "$POSTGRES_DSN" down 1
 
 ## Current state
 
-Phase 10 observability is in place: JSON `slog` with correlation IDs and payload redaction;
-Prometheus catalog on public `GET /metrics` ([ADR 0021](docs/adr/0021-observability-logs-and-metrics.md)).
-Phase 9 multi-instance proof remains (`TestInstances*`). Transactional inbox + SQS consume remain
-from Phase 7; `PENDING` / `PENDING_REFERENCE` rows are claimed with `SKIP LOCKED`. HTTP use cases,
-domain, persistence, OIDC and the outbox publisher remain. Tracing is not implemented.
-Decisions: [ADR 0001](docs/adr/0001-package-layout-and-layer-boundaries.md)–[0005](docs/adr/0005-test-strategy-initial.md)
-(accepted); [ADR 0006](docs/adr/0006-money-representation.md)–[0021](docs/adr/0021-observability-logs-and-metrics.md)
-(proposed). Next: Phase 11 delivery.
+Phase 11 delivery is complete: README, ARCHITECTURE, `.env.example`, runbooks (including pending
+references) and a final spec audit. JSON `slog` with correlation IDs and payload redaction plus a
+Prometheus catalog on public `GET /metrics` remain from Phase 10
+([ADR 0021](docs/adr/0021-observability-logs-and-metrics.md)). Multi-instance proof (`TestInstances*`),
+transactional inbox + SQS consume, pending-reference `SKIP LOCKED`, HTTP use cases, domain,
+persistence, OIDC and the outbox publisher remain. Tracing, load tests and double-entry bookkeeping
+are optional extras and are not implemented. Decisions:
+[ADR 0001](docs/adr/0001-package-layout-and-layer-boundaries.md)–[0021](docs/adr/0021-observability-logs-and-metrics.md)
+(accepted).

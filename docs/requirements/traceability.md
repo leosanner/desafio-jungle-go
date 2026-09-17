@@ -28,7 +28,7 @@ the `spec-audit` skill or when completing a deliverable.
 | STK-02 | `go.mod` and `go.sum` versioned | ✅ | `go.mod`, `go.sum` (`github.com/leosanner/desafio-jungle-go`) | |
 | STK-03 | Docker Compose with PostgreSQL, IdP and LocalStack/MiniStack | ✅ | `docker-compose.yml` (postgres 16, Keycloak 26 + realm import, LocalStack 4.6); [test-dependencies.md](../runbooks/test-dependencies.md) | Realm `wagering` imported from `docker/keycloak/realm-wagering.json` |
 | STK-04 | Versioned migrations with documented apply and rollback | ✅ | `migrations/000001_bootstrap.up.sql` / `.down.sql`; `migrations/000002_financial_schema.up.sql` / `.down.sql`; `migrations/000003_outbox.up.sql` / `.down.sql`; `migrations/000004_inbox.up.sql` / `.down.sql`; [README](../../README.md) Migrations; [ADR 0003](../adr/0003-database-access-and-migrations.md) | App Up on start from `MIGRATIONS_PATH`; CLI `down 1` |
-| STK-05 | DB library, `Money` mapping and cross-repository transaction documented | ✅ | [ADR 0003](../adr/0003-database-access-and-migrations.md) (`pgx/v5`); [ADR 0006](../adr/0006-money-representation.md) (`int64` cents → `BIGINT`, Proposed); [ADR 0009](../adr/0009-sql-unit-of-work.md) (Proposed); `internal/app/ports.go` (`UnitOfWork`); `internal/adapter/postgres/uow.go`; `migrations/000002_financial_schema.up.sql`; `TestMapError`; `TestUnitOfWorkAtomicity` | ADRs 0006/0009 still Proposed |
+| STK-05 | DB library, `Money` mapping and cross-repository transaction documented | ✅ | [ADR 0003](../adr/0003-database-access-and-migrations.md) (`pgx/v5`); [ADR 0006](../adr/0006-money-representation.md) (`int64` cents → `BIGINT`); [ADR 0009](../adr/0009-sql-unit-of-work.md); `internal/app/ports.go` (`UnitOfWork`); `internal/adapter/postgres/uow.go`; `migrations/000002_financial_schema.up.sql`; `TestMapError`; `TestUnitOfWorkAtomicity` | |
 | FX-01 | Composition via `fx.Module`, `fx.Provide`, `fx.Invoke` with constructors | ✅ | `internal/composition/`; `cmd/wagering/main.go`; `TestValidateApp`; [ADR 0004](../adr/0004-fx-lifecycle-and-shutdown.md) | |
 | FX-02 | Config and dependency validation on start | ✅ | `internal/config/`; `TestInvalidConfigFailsStart`; [ADR 0004](../adr/0004-fx-lifecycle-and-shutdown.md) | |
 | FX-03 | Workers with cancellation, deadlines and observable termination | ✅ | `OutboxWorker` (`internal/composition/outbox.go`); `InboundWorker` (`internal/composition/inbound.go`); `PendingWorker` (`internal/composition/pending.go`); `TestOutboxWorkerStartStopClosesDone`; `TestPendingWorkerStartStopClosesDone`; `TestConsumerRunStopsOnCancel`; `TestAppStartStop` | |
@@ -46,7 +46,7 @@ the `spec-audit` skill or when completing a deliverable.
 | AUTH-04 | Provider accesses only its own transactions, including replays | ✅ | Path isolation `TestProviderIsolationOnPath`, `TestAuthRealIdP`; POST body `providerId` must match `azp`; `TestGetTransactionHidesOtherProvider`; `TestHTTPPhase5UseCases` | |
 | AUTH-05 | Wallet operations restricted to the internal service | ✅ | `requireInternal` on wallet routes; `OIDC_INTERNAL_CLIENT`; `TestWalletRestrictedToInternal`; `TestAuthRealIdP/provider_cannot_open_wallet` | |
 | AUTH-06 | Broker access controlled by credentials/policies | ✅ | LocalStack/AWS static keys required; inbound consumer uses queue-gated `data.providerId` ([ADR 0018](../adr/0018-sqs-inbound-consume.md)); [inbound.md](../events/inbound.md) |
-| AUTH-07 | IdP, validation and permission rationale in `ARCHITECTURE.md` | ✅ | [ARCHITECTURE.md](../../ARCHITECTURE.md) Authentication; [ADR 0011](../adr/0011-oidc-keycloak-auth.md); [auth.md](../api/auth.md) | ADR Proposed |
+| AUTH-07 | IdP, validation and permission rationale in `ARCHITECTURE.md` | ✅ | [ARCHITECTURE.md](../../ARCHITECTURE.md) Authentication; [ADR 0011](../adr/0011-oidc-keycloak-auth.md); [auth.md](../api/auth.md) | |
 
 ## Guarantees (§5)
 
@@ -56,7 +56,7 @@ the `spec-audit` skill or when completing a deliverable.
 | GAR-02 | Persistent idempotency surviving restarts | ✅ | Hash and key on `wager_transactions`; `TestSubmitReplayAndConflicts`; `TestHTTPPhase5UseCases` | |
 | GAR-03 | Invariants in the database, independent of local locks and FIFO dedup | ✅ | `migrations/000002_financial_schema.up.sql`; `TestFinancialSchemaConstraints` (raw SQL, no app locks); `TestLedgerAppendOnly` | |
 | GAR-04 | Publishing only after commit | ✅ | Outbox rows inserted unpublished in the same `Within`; `OutboxRelay` claims after commit ([ADR 0016](../adr/0016-outbox-claim-and-backoff.md); `TestOutboxRelayPublishesOpeningEvents`) | |
-| GAR-05 | Append-only ledger | ✅ | `000002` trigger `wallet_ledger_entries_append_only`; `REVOKE UPDATE, DELETE, TRUNCATE`; `TestLedgerAppendOnly`; `internal/adapter/postgres/ledger.go` (insert/list only) | HTTP ledger read later |
+| GAR-05 | Append-only ledger | ✅ | `000002` trigger `wallet_ledger_entries_append_only`; `REVOKE UPDATE, DELETE, TRUNCATE`; `TestLedgerAppendOnly`; `internal/adapter/postgres/ledger.go` (insert/list only); HTTP `GET .../ledger` (`TestHTTPPhase5UseCases`) | |
 | GAR-06 | Independent wallets in parallel; no global lock | ✅ | [ADR 0010](../adr/0010-per-wallet-concurrency.md) (row lock per wallet; no global mutex); `GetByIDForUpdate`; `TestHTTPDistinctWalletsParallel`; `TestInstancesDistinctWalletsParallel` | |
 | GAR-07 | No lost updates | ✅ | [ADR 0010](../adr/0010-per-wallet-concurrency.md); `GetByIDForUpdate`; version-conditioned `UPDATE`; `TestConcurrentBetsSerializePerWallet`; `TestInstancesThreeProcessesTwoBetsOnHundred` | |
 | GAR-08 | Uniqueness, non-negativity and immutability enforced by the schema | ✅ | `000002`; `TestFinancialSchemaConstraints`; `TestLedgerAppendOnly`; `TestDuplicateWalletInsertConflict` | |
@@ -73,7 +73,7 @@ the `spec-audit` skill or when completing a deliverable.
 | MON-01 | Immutable `Money`: parse from string, zero, add, subtract, negate, compare, serialize | ✅ | `internal/domain/money.go`; `TestParseMoneyAcceptsCanonical`; `TestMoneyArithmetic`; `TestMoneyJSON` | | |
 | MON-02 | Contract `{"amount":"25.00","currency":"BRL"}`, scale 2, ISO 4217 | ✅ | `TestMoneyJSON`; `ParseCurrency` | | |
 | MON-03 | Rejects empty, NaN, Infinity, scientific notation, excess scale, negative external input | ✅ | `TestParseMoneyRejectsInvalid` | | |
-| MON-04 | No silent rounding; normalization before hashing documented | ✅ | [ADR 0006](../adr/0006-money-representation.md); non-canonical forms rejected | Hash algorithm later | |
+| MON-04 | No silent rounding; normalization before hashing documented | ✅ | [ADR 0006](../adr/0006-money-representation.md); [ADR 0012](../adr/0012-idempotency-canonical-hash.md); non-canonical forms rejected; `TestHashCanonicalPayloadStableAndExcludesTransport` | |
 | MON-05 | Incompatible currencies rejected (with tests) | ✅ | `TestMoneyIncompatibleCurrency`; `TestWalletCurrencyMismatch` | | |
 | MON-06 | Overflow handled (if `int64`) | ✅ | `TestMoneyOverflow`; `TestParseMoneyRejectsInvalid` (`overflow`) | | |
 | MON-07 | Exact persistence of amount and currency; representation and limits documented | ✅ | [ADR 0006](../adr/0006-money-representation.md); `migrations/000002_financial_schema.up.sql` (`*_minor BIGINT`, `CHAR(3)` currency); `internal/adapter/postgres` (`Minor()` / `MoneyFromMinor`) | | |
@@ -82,7 +82,7 @@ the `spec-audit` skill or when completing a deliverable.
 | WAL-03 | Debit keeps balance ≥ 0; currency matches | ✅ | `TestWalletDebitInsufficientFunds`; `TestWalletCurrencyMismatch` | | |
 | WAL-04 | Financial change with ledger entry in the same commit | ✅ | Domain `Debit`/`Credit`/`Apply`; `UnitOfWork.Within`; `TestUnitOfWorkAtomicity`; [ADR 0009](../adr/0009-sql-unit-of-work.md) | |
 | WAL-05 | Initial version 1, increments only on balance change | ✅ | `TestOpenWallet*`; `TestWalletDebitCreditAndVersion`; `TestApplyBetWinLoss` (LOSS) | | |
-| WAL-06 | Concurrency strategy documented | ✅ | [ADR 0010](../adr/0010-per-wallet-concurrency.md) (Proposed); `GetByIDForUpdate` + version-conditioned `UPDATE` in `internal/adapter/postgres/wallet.go`; N processes in [ADR 0020](../adr/0020-multi-instance-and-failure-injection.md) | | |
+| WAL-06 | Concurrency strategy documented | ✅ | [ADR 0010](../adr/0010-per-wallet-concurrency.md); `GetByIDForUpdate` + version-conditioned `UPDATE` in `internal/adapter/postgres/wallet.go`; N processes in [ADR 0020](../adr/0020-multi-instance-and-failure-injection.md) | |
 | WTX-01 | External transaction fields persisted (ids, provider, key, hash, round, game, reference, result) | ✅ | `internal/domain/transaction.go`; `migrations/000002_financial_schema.up.sql`; `internal/adapter/postgres/transaction.go` (insert/scan of ids, provider, key, hash, round, game, reference, result) | | |
 | WTX-02 | Validated state machine; immutable terminal states; documented | ✅ | [ADR 0007](../adr/0007-wager-transaction-state-machine.md); `TestStateMachineTransitions`; `TestRejectedIsTerminal` | | |
 | WTX-03 | Replay returns persisted result without re-applying | ✅ | Rehydration does not re-apply; `ResultBalance` snapshot; `TestSubmitReplayAndConflicts`; `TestHTTPPhase5UseCases` | |
@@ -112,7 +112,7 @@ the `spec-audit` skill or when completing a deliverable.
 | OPS-10 | `PENDING_REFERENCE` with worker and exponential backoff, survives restart | ✅ | `PendingWorker` (`internal/composition/pending.go`); claim `SKIP LOCKED` + `Backoff` ([ADR 0019](../adr/0019-pending-reference-resume.md)); `TestResumeDueResolvesWhenReferenceArrives`; `TestPendingRefundResolvesWhenBetArrives` |
 | OPS-11 | Max attempts/TTL → `REJECTED` with reference-not-found code + event | ✅ | `REFERENCE_NOT_FOUND`; `TestResumeDueExpiresReferenceNotFound`; `TestResumeDueTTLExpires`; `TestPendingRefundExpiresReferenceNotFound`; [failure-codes.md](../api/failure-codes.md) |
 | OPS-12 | Behavior with a pending or unsuccessful reference documented | ✅ | [ADR 0007](../adr/0007-wager-transaction-state-machine.md); [ADR 0019](../adr/0019-pending-reference-resume.md); [pending-references.md](../events/pending-references.md); `TestApplyPendingAndUnsuccessfulReference` | | |
-| OPS-13 | Stable, documented `failureCode`, correctable × definitive | ✅ | [`docs/api/failure-codes.md`](../api/failure-codes.md); `TestFailureCodeCorrectableVsDefinitive` | HTTP mapping later | |
+| OPS-13 | Stable, documented `failureCode`, correctable × definitive | ✅ | [`docs/api/failure-codes.md`](../api/failure-codes.md); [ADR 0013](../adr/0013-http-status-mapping.md); `TestFailureCodeCorrectableVsDefinitive` | |
 
 ## Concurrency (§8)
 
@@ -203,11 +203,11 @@ the `spec-audit` skill or when completing a deliverable.
 
 | ID | Requirement | Status | Evidence | Notes |
 | --- | --- | --- | --- | --- |
-| ENT-01 | Reproducible from a clean checkout | 🚧 | [README](../../README.md) | Phase 1 instructions written; Compose/image/binary owned by other agents |
-| ENT-02 | README: prerequisites, env, queues, migrations, running, examples, tests | 🚧 | [README.md](../../README.md) | Phase 10 `/metrics` and log fields documented; delivery polish Phase 11 |
+| ENT-01 | Reproducible from a clean checkout | ✅ | [README](../../README.md); `docker compose up --build`; [`.env.example`](../../.env.example); [test-dependencies.md](../runbooks/test-dependencies.md) | Host vs Compose `OIDC_ISSUER` documented |
+| ENT-02 | README: prerequisites, env, queues, migrations, running, examples, tests | ✅ | [README.md](../../README.md) (health, wallet, BET, ledger, reconciliation, SQS send); [auth.md](../api/auth.md) | |
 | ENT-03 | `.env.example` without real secrets | ✅ | `.env.example` | Local dummy keys only |
 | ENT-04 | Automatic IdP provisioning and test identities | ✅ | `docker/keycloak/realm-wagering.json`; Compose `--import-realm`; [auth.md](../api/auth.md); [README](../../README.md) Authentication | Local dummy client secrets |
-| ENT-05 | ARCHITECTURE.md with decisions, limitations, interpretations and unfinished work | 🚧 | [ARCHITECTURE.md](../../ARCHITECTURE.md); [docs/adr/](../adr/) | Phase 10 observability summarized; ADRs 0006–0021 Proposed |
+| ENT-05 | ARCHITECTURE.md with decisions, limitations, interpretations and unfinished work | ✅ | [ARCHITECTURE.md](../../ARCHITECTURE.md); [docs/adr/](../adr/) (0001–0021 Accepted) | Optional tracing, load tests and double-entry listed as unfinished |
 | ENT-06 | `docker compose up --build`, `go test ./...`, `go test -race ./...`, `go vet ./...` | ✅ | [README](../../README.md); Compose stack healthy; unit/`vet`/`-race` pass | |
-| ENT-07 | Separate docs: test dependencies, integration, multiple instances, failures, build tags | 🚧 | [test-dependencies.md](../runbooks/test-dependencies.md); [integration.md](../runbooks/integration.md); [multiple-instances.md](../runbooks/multiple-instances.md); [failure-simulation.md](../runbooks/failure-simulation.md); [ADR 0005](../adr/0005-test-strategy-initial.md), [ADR 0020](../adr/0020-multi-instance-and-failure-injection.md) | Pending-reference operator runbook and optional load test still later |
-| ENT-08 | `gofmt`-formatted code and reproducible dependencies | 🚧 | [ADR 0005](../adr/0005-test-strategy-initial.md); `gofmt -l .` in README | Domain added in Phase 2 |
+| ENT-07 | Separate docs: test dependencies, integration, multiple instances, failures, build tags | ✅ | [test-dependencies.md](../runbooks/test-dependencies.md); [integration.md](../runbooks/integration.md); [multiple-instances.md](../runbooks/multiple-instances.md); [failure-simulation.md](../runbooks/failure-simulation.md); [pending-references.md](../runbooks/pending-references.md); [ADR 0005](../adr/0005-test-strategy-initial.md), [ADR 0020](../adr/0020-multi-instance-and-failure-injection.md) | Optional load test not shipped (`init.md` §14) |
+| ENT-08 | `gofmt`-formatted code and reproducible dependencies | ✅ | `gofmt -l .` empty; `go.mod` / `go.sum` versioned; [ADR 0005](../adr/0005-test-strategy-initial.md) | |

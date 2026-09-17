@@ -1,7 +1,7 @@
 # Roadmap
 
-Proposed phases. Each phase ends with passing tests, an updated traceability matrix and ADRs for the
-decisions made. The order prioritizes the highest-weighted criteria (§14) and minimizes rework.
+Phases. Each phase ends with passing tests, an updated traceability matrix and ADRs for the
+decisions made. The order prioritized the highest-weighted criteria (§14) and minimized rework.
 
 | Phase | Deliverable | Main requirements | Status |
 | --- | --- | --- | --- |
@@ -16,4 +16,4 @@ decisions made. The order prioritizes the highest-weighted criteria (§14) and m
 | 8 | Pending references and `PENDING` resumption | OPS-10..12, WTX-04, TST-14/15 | ✅ |
 | 9 | Multiple instances and failure simulation | CON-02, TST-11, runbooks | ✅ |
 | 10 | Observability: logs, metrics | OBS | ✅ |
-| 11 | Delivery: README, ARCHITECTURE, `.env.example`, final audit | ENT, ELIM | — |
+| 11 | Delivery: README, ARCHITECTURE, `.env.example`, final audit | ENT, ELIM | ✅ |
