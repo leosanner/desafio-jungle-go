@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/leosanner/desafio-jungle-go/internal/domain"
 )
@@ -31,8 +32,10 @@ type SubmitResult struct {
 }
 
 // Submit applies an external operation with persistent idempotency.
-func (s *Service) Submit(ctx context.Context, cmd SubmitCommand) (SubmitResult, error) {
-	if err := authorizeSubmit(cmd.Actor, cmd.ProviderID); err != nil {
+func (s *Service) Submit(ctx context.Context, cmd SubmitCommand) (out SubmitResult, err error) {
+	start := time.Now()
+	defer func() { s.observeSubmit(cmd.Kind, MetricChannelHTTP, time.Since(start), out, err) }()
+	if err = authorizeSubmit(cmd.Actor, cmd.ProviderID); err != nil {
 		return SubmitResult{}, err
 	}
 	hash, err := domain.HashCanonicalPayload(domain.CanonicalPayload{
@@ -50,7 +53,6 @@ func (s *Service) Submit(ctx context.Context, cmd SubmitCommand) (SubmitResult, 
 		return SubmitResult{}, err
 	}
 
-	var out SubmitResult
 	err = s.uow.Within(ctx, func(ctx context.Context, repos Repositories) error {
 		res, replay, err := s.submitInTx(ctx, repos, cmd, hash)
 		if err != nil {

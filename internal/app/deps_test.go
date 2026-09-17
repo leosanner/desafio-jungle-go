@@ -7,6 +7,7 @@ import (
 )
 
 var forbiddenDeps = []string{
+	"github.com/prometheus/",
 	"go.uber.org/fx",
 	"net/http",
 	"github.com/coreos/go-oidc",

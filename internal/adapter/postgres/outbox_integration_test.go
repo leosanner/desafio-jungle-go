@@ -146,6 +146,37 @@ func TestOutboxMarkPublishedAndRetry(t *testing.T) {
 	}
 }
 
+func TestOutboxLagUnpublishedAndCleared(t *testing.T) {
+	t.Parallel()
+	db := openMigratedDB(t)
+	claimer := NewOutboxClaimer(db.pool)
+	rec := sampleRecord(t, "lag")
+	insertUnpublished(t, db, rec)
+
+	now := integrationNow.Add(time.Minute)
+	lag, err := claimer.Lag(t.Context(), now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lag.Unpublished != 1 {
+		t.Fatalf("unpublished = %d", lag.Unpublished)
+	}
+	if lag.OldestAge != time.Minute {
+		t.Fatalf("oldest = %s", lag.OldestAge)
+	}
+
+	if err := claimer.MarkPublished(t.Context(), rec.EventID, now); err != nil {
+		t.Fatal(err)
+	}
+	cleared, err := claimer.Lag(t.Context(), now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cleared.Unpublished != 0 || cleared.OldestAge != 0 {
+		t.Fatalf("cleared = %+v", cleared)
+	}
+}
+
 func requireSQSEnv(t *testing.T) config.Config {
 	t.Helper()
 	if os.Getenv("AWS_ENDPOINT_URL") == "" || os.Getenv("AWS_REGION") == "" {

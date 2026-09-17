@@ -20,6 +20,7 @@ func Modules() fx.Option {
 			return l
 		}),
 		configModule(),
+		metricsModule(),
 		postgresModule(),
 		sqsModule(),
 		authModule(),

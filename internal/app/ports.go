@@ -38,15 +38,48 @@ type IDGenerator interface {
 	NewID() string
 }
 
-// Metrics is a narrow Phase 5 port; full observability is Phase 10.
+// Metric channel labels (OBS-02).
+const (
+	MetricChannelHTTP = "http"
+	MetricChannelSQS  = "sqs"
+)
+
+// Conflict reason labels (OBS-02).
+const (
+	ConflictIdempotencyPayload = "idempotency_payload"
+	ConflictDuplicateExternal  = "duplicate_external"
+	ConflictOptimisticLock     = "optimistic_lock"
+	ConflictUnavailable        = "unavailable"
+)
+
+// Metrics records OBS-02 counters and histograms. Implementations must not use
+// floating-point types for money; durations are wall-clock time.Duration.
 type Metrics interface {
 	IncReconciliationDivergence()
+	ObserveHTTP(method, pattern string, status int, d time.Duration)
+	ObserveOperation(kind, status, channel string, d time.Duration)
+	IncDuplicate(kind, channel string)
+	IncConflict(reason string)
+	IncSQSRetry()
+	IncSQSDLQ()
+	SetOutboxLag(unpublished int, oldest time.Duration)
+	IncOutboxPublished(n int)
+	IncOutboxPublishFailed(n int)
 }
 
 // NopMetrics discards metric increments.
 type NopMetrics struct{}
 
-func (NopMetrics) IncReconciliationDivergence() {}
+func (NopMetrics) IncReconciliationDivergence()                           {}
+func (NopMetrics) ObserveHTTP(string, string, int, time.Duration)         {}
+func (NopMetrics) ObserveOperation(string, string, string, time.Duration) {}
+func (NopMetrics) IncDuplicate(string, string)                            {}
+func (NopMetrics) IncConflict(string)                                     {}
+func (NopMetrics) IncSQSRetry()                                           {}
+func (NopMetrics) IncSQSDLQ()                                             {}
+func (NopMetrics) SetOutboxLag(int, time.Duration)                        {}
+func (NopMetrics) IncOutboxPublished(int)                                 {}
+func (NopMetrics) IncOutboxPublishFailed(int)                             {}
 
 // UnitOfWork is the SQL transaction boundary without leaking driver types.
 type UnitOfWork interface {
@@ -155,11 +188,18 @@ type OutboxRepository interface {
 	Insert(ctx context.Context, rec OutboxRecord) error
 }
 
+// OutboxLag is unpublished-outbox backlog for OBS-02.
+type OutboxLag struct {
+	Unpublished int
+	OldestAge   time.Duration
+}
+
 // OutboxClaimer claims and acknowledges unpublished rows outside the financial unit of work.
 type OutboxClaimer interface {
 	Claim(ctx context.Context, limit int, now time.Time, lease time.Duration) ([]OutboxRecord, error)
 	MarkPublished(ctx context.Context, eventID string, at time.Time) error
 	ScheduleRetry(ctx context.Context, eventID string, nextAttempt time.Time) error
+	Lag(ctx context.Context, now time.Time) (OutboxLag, error)
 }
 
 // PendingWork is one claimed PENDING / PENDING_REFERENCE row (ADR 0019).

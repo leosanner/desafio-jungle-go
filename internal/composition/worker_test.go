@@ -21,6 +21,9 @@ func (emptyClaimer) Claim(context.Context, int, time.Time, time.Duration) ([]app
 }
 func (emptyClaimer) MarkPublished(context.Context, string, time.Time) error { return nil }
 func (emptyClaimer) ScheduleRetry(context.Context, string, time.Time) error { return nil }
+func (emptyClaimer) Lag(context.Context, time.Time) (app.OutboxLag, error) {
+	return app.OutboxLag{}, nil
+}
 
 type emptyPendingClaimer struct{}
 
@@ -45,7 +48,7 @@ func TestOutboxWorkerStartStopClosesDone(t *testing.T) {
 	w := composition.NewOutboxWorker(lc, relay, config.Config{
 		OutboxPollInterval: 20 * time.Millisecond,
 		OutboxLease:        time.Second,
-	}, log)
+	}, log, app.NopMetrics{})
 	ctx := t.Context()
 	if err := lc.Start(ctx); err != nil {
 		t.Fatalf("start: %v", err)

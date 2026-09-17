@@ -87,3 +87,12 @@ func (r *OutboxRelay) PublishDue(ctx context.Context) (PublishResult, error) {
 	}
 	return out, nil
 }
+
+// Lag reports unpublished outbox backlog (including leased rows).
+func (r *OutboxRelay) Lag(ctx context.Context) (OutboxLag, error) {
+	lag, err := r.claimer.Lag(ctx, r.clock.Now().UTC())
+	if err != nil {
+		return OutboxLag{}, fmt.Errorf("outbox lag: %w", err)
+	}
+	return lag, nil
+}

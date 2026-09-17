@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/leosanner/desafio-jungle-go/internal/domain"
 )
@@ -26,12 +27,13 @@ func HashMessageBody(body []byte) string {
 }
 
 // HandleInbound applies an inbound SQS message with inbox + domain in one commit.
-func (s *Service) HandleInbound(ctx context.Context, cmd InboundCommand) (SubmitResult, error) {
-	if err := validateInbound(cmd); err != nil {
+func (s *Service) HandleInbound(ctx context.Context, cmd InboundCommand) (out SubmitResult, err error) {
+	start := time.Now()
+	defer func() { s.observeSubmit(cmd.Submit.Kind, MetricChannelSQS, time.Since(start), out, err) }()
+	if err = validateInbound(cmd); err != nil {
 		return SubmitResult{}, err
 	}
-	var out SubmitResult
-	err := s.uow.Within(ctx, func(ctx context.Context, repos Repositories) error {
+	err = s.uow.Within(ctx, func(ctx context.Context, repos Repositories) error {
 		res, err := s.inboundInTx(ctx, repos, cmd)
 		if err != nil {
 			return err

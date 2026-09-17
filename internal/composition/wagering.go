@@ -11,7 +11,6 @@ func wageringModule() fx.Option {
 		fx.Provide(
 			func() app.Clock { return app.SystemClock{} },
 			func() app.IDGenerator { return app.UUIDGenerator{} },
-			func() app.Metrics { return app.NopMetrics{} },
 			app.NewService,
 		),
 	)

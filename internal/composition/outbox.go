@@ -38,17 +38,22 @@ type OutboxWorker struct {
 	interval time.Duration
 	lease    time.Duration
 	log      *slog.Logger
+	metrics  app.Metrics
 	cancel   context.CancelFunc
 	done     chan struct{}
 }
 
 // NewOutboxWorker registers start/stop hooks on the worker that owns the goroutine.
-func NewOutboxWorker(lc fx.Lifecycle, relay *app.OutboxRelay, cfg config.Config, log *slog.Logger) *OutboxWorker {
+func NewOutboxWorker(lc fx.Lifecycle, relay *app.OutboxRelay, cfg config.Config, log *slog.Logger, metrics app.Metrics) *OutboxWorker {
+	if metrics == nil {
+		metrics = app.NopMetrics{}
+	}
 	w := &OutboxWorker{
 		relay:    relay,
 		interval: cfg.OutboxPollInterval,
 		lease:    cfg.OutboxLease,
 		log:      log,
+		metrics:  metrics,
 		done:     make(chan struct{}),
 	}
 	lc.Append(fx.Hook{
@@ -94,6 +99,13 @@ func (w *OutboxWorker) tick() {
 	if err != nil {
 		w.log.Error("outbox: publish due", "err", err)
 		return
+	}
+	w.metrics.IncOutboxPublished(res.Published)
+	w.metrics.IncOutboxPublishFailed(res.Failed)
+	if lag, lagErr := w.relay.Lag(itemCtx); lagErr != nil {
+		w.log.Error("outbox: lag", "err", lagErr)
+	} else {
+		w.metrics.SetOutboxLag(lag.Unpublished, lag.OldestAge)
 	}
 	if res.Published > 0 || res.Failed > 0 || res.Skipped > 0 {
 		w.log.Info("outbox: tick",

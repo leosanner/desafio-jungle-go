@@ -113,6 +113,23 @@ func (c *OutboxClaimer) Claim(ctx context.Context, limit int, now time.Time, lea
 	return recs, nil
 }
 
+func (c *OutboxClaimer) Lag(ctx context.Context, now time.Time) (app.OutboxLag, error) {
+	const q = `
+		SELECT COUNT(*)::int, MIN(occurred_at)
+		FROM wagering.outbox_events
+		WHERE published_at IS NULL`
+	var n int
+	var oldest *time.Time
+	if err := c.pool.QueryRow(ctx, q).Scan(&n, &oldest); err != nil {
+		return app.OutboxLag{}, mapError(err)
+	}
+	lag := app.OutboxLag{Unpublished: n}
+	if oldest != nil && now.After(*oldest) {
+		lag.OldestAge = now.Sub(*oldest)
+	}
+	return lag, nil
+}
+
 func (c *OutboxClaimer) MarkPublished(ctx context.Context, eventID string, at time.Time) error {
 	const q = `
 		UPDATE wagering.outbox_events

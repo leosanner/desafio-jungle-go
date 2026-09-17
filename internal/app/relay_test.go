@@ -56,6 +56,12 @@ func (f *fakeClaimer) ScheduleRetry(_ context.Context, eventID string, next time
 	return nil
 }
 
+func (f *fakeClaimer) Lag(_ context.Context, _ time.Time) (OutboxLag, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return OutboxLag{Unpublished: len(f.due)}, nil
+}
+
 type fakeBus struct {
 	mu      sync.Mutex
 	sent    []Envelope
