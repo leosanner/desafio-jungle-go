@@ -67,6 +67,7 @@ go run ./cmd/wagering
 go test ./...
 go test -race ./...
 go test -tags=integration ./...
+go run ./cmd/loadtest
 go vet ./...
 gofmt -l .
 migrate -path migrations -database "$POSTGRES_DSN" down 1
@@ -86,16 +87,18 @@ migrate -path migrations -database "$POSTGRES_DSN" down 1
   need `POSTGRES_DSN` and LocalStack (`AWS_ENDPOINT_URL`). Phase 8 pending-reference tests
   (`TestPending*`) need `POSTGRES_DSN` only. Phase 9 multi-instance tests (`TestInstances*`) need
   `POSTGRES_DSN`, `OIDC_ISSUER` and LocalStack (`AWS_ENDPOINT_URL`). TST-07 needs `OIDC_ISSUER` and a
-  running Keycloak with the imported `wagering` realm.
+  running Keycloak with the imported `wagering` realm. Optional load burst: `go run ./cmd/loadtest`
+  against a ready process ([docs/runbooks/load-test.md](docs/runbooks/load-test.md); [ADR 0022](docs/adr/0022-load-test-harness.md) Proposed).
 
 ## Current state
 
 Phase 11 delivery is complete: README, ARCHITECTURE, `.env.example`, runbooks (including pending
-references) and a final spec audit. JSON `slog` with correlation IDs and payload redaction plus a
-Prometheus catalog on public `GET /metrics` remain from Phase 10
+references and an optional load burst) and a final spec audit. JSON `slog` with correlation IDs
+and payload redaction plus a Prometheus catalog on public `GET /metrics` remain from Phase 10
 ([ADR 0021](docs/adr/0021-observability-logs-and-metrics.md)). Multi-instance proof (`TestInstances*`),
 transactional inbox + SQS consume, pending-reference `SKIP LOCKED`, HTTP use cases, domain,
-persistence, OIDC and the outbox publisher remain. Tracing, load tests and double-entry bookkeeping
-are optional extras and are not implemented. Decisions:
+persistence, OIDC and the outbox publisher remain. Tracing and double-entry bookkeeping are
+optional extras and are not implemented. Load tests ship as `go run ./cmd/loadtest` with
+[ADR 0022](docs/adr/0022-load-test-harness.md) Proposed. Decisions:
 [ADR 0001](docs/adr/0001-package-layout-and-layer-boundaries.md)–[0021](docs/adr/0021-observability-logs-and-metrics.md)
 (accepted).

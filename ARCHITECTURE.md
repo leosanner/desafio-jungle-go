@@ -22,6 +22,7 @@ Hexagonal / ports-and-adapters. Dependencies point inward. Fx is imported only f
 
 ```
 cmd/wagering/
+cmd/loadtest/
 internal/config/
 internal/domain/
 internal/app/
@@ -35,6 +36,8 @@ migrations/
 ```
 
 Details: [ADR 0001](docs/adr/0001-package-layout-and-layer-boundaries.md).
+`cmd/loadtest` is optional operator tooling (`go run ./cmd/loadtest`); it is not the Fx process
+([ADR 0022](docs/adr/0022-load-test-harness.md) Proposed).
 
 ## Money (`Money`)
 
@@ -207,9 +210,9 @@ HTTP statuses: [ADR 0013](docs/adr/0013-http-status-mapping.md), [`docs/api/stat
 ### Unfinished / out of scope
 
 - OpenTelemetry tracing and dashboards (OBS-03) — optional in `init.md` §12 / §14; not implemented.
-- Load tests — optional differential (`init.md` §14). No reproducible throughput harness is shipped.
-  Concurrency and recovery are proven by tagged tests and runbooks, not by p50/p95/p99 targets.
-  There is no RPS goal.
+- Load tests — optional differential (`init.md` §14). Harness: `go run ./cmd/loadtest`
+  ([docs/runbooks/load-test.md](docs/runbooks/load-test.md)). [ADR 0022](docs/adr/0022-load-test-harness.md)
+  is **Proposed**. There is no RPS goal; burst throughput is not a capacity SLO.
 - Double-entry bookkeeping (“partidas dobradas”) — optional differential; the ledger is
   append-only credit/debit entries, not a paired double-entry chart of accounts.
 - `sqlc` was considered and not chosen ([ADR 0003](docs/adr/0003-database-access-and-migrations.md)).

@@ -15,6 +15,7 @@ Each runbook must include: prerequisites, exact commands, expected outcome and h
 | [multiple-instances.md](multiple-instances.md) | ≥3 contending processes (host binaries or Compose overlay) | ✅ |
 | [failure-simulation.md](failure-simulation.md) | Crash after commit, publish-before-ack, `kill -9`, PG/SQS unavailability | ✅ |
 | [pending-references.md](pending-references.md) | Reversal before its reference, resolution and expiry | ✅ |
+| [load-test.md](load-test.md) | Optional burst: throughput, p50/p95/p99, conflicts, outbox lag | ✅ |
 
-Load tests (throughput, p50/p95/p99, outbox lag under load) are an optional differential in
-`init.md` §14 and are **not** included. There is no RPS goal.
+Load tests are an optional differential in `init.md` §14. Command: `go run ./cmd/loadtest`.
+There is no RPS goal. [ADR 0022](../adr/0022-load-test-harness.md) (Proposed).

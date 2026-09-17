@@ -299,7 +299,9 @@ dependencies: [`docs/runbooks/test-dependencies.md`](docs/runbooks/test-dependen
 [`docs/runbooks/multiple-instances.md`](docs/runbooks/multiple-instances.md)
 ([ADR 0020](docs/adr/0020-multi-instance-and-failure-injection.md)). Crashes and dependency loss:
 [`docs/runbooks/failure-simulation.md`](docs/runbooks/failure-simulation.md). Pending references:
-[`docs/runbooks/pending-references.md`](docs/runbooks/pending-references.md).
+[`docs/runbooks/pending-references.md`](docs/runbooks/pending-references.md). Optional load burst
+(throughput, p50/p95/p99, conflicts, outbox lag): [`docs/runbooks/load-test.md`](docs/runbooks/load-test.md)
+(`go run ./cmd/loadtest`; [ADR 0022](docs/adr/0022-load-test-harness.md) Proposed).
 
 ## Documentation
 

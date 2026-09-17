@@ -92,7 +92,8 @@ skips without `OIDC_ISSUER`. Phase 9 (`./internal/composition/ -run TestInstance
 `POSTGRES_DSN`, `OIDC_ISSUER` or `AWS_ENDPOINT_URL`. See [integration.md](integration.md).
 
 Multi-instance: [`multiple-instances.md`](multiple-instances.md). Failure injection:
-[`failure-simulation.md`](failure-simulation.md).
+[`failure-simulation.md`](failure-simulation.md). Optional load burst:
+[`load-test.md`](load-test.md).
 
 ## Stop
 
