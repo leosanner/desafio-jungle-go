@@ -1,6 +1,6 @@
 # 0011 — OIDC authentication with Keycloak
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-09-16
 - **Related requirements:** `init.md` §2 (IdP, `client_credentials`, `providerId` from identity, provider isolation, internal-only wallets, broker credentials); §4 authentication; §9 health stays public; §13 TST-07; §14 ELIM-01/02; §15 ENT-04/05; matrix IDs AUTH-01..07, ELIM-01/02, TST-07, ENT-04
 

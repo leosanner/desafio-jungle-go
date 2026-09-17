@@ -1,6 +1,6 @@
 # 0009 — SQL unit of work / transaction boundary
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-09-15
 - **Related requirements:** `init.md` §4 (document the SQL transaction boundary across repositories); §5 guarantees 3, 5, 7, 8; matrix IDs STK-05, WAL-04, GAR-03, GAR-05, GAR-07, GAR-08, OBX-01
 

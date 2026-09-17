@@ -1,6 +1,6 @@
 # 0019 — Pending-reference worker, backoff, TTL and PENDING resume
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-09-16
 - **Related requirements:** `init.md` §6.3, §6.5, §7; matrix IDs OPS-10, OPS-11, OPS-12, WTX-04, TST-14, TST-15, FX-03/04
 

@@ -1,6 +1,6 @@
 # 0020 — Multi-instance verification and failure injection
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-09-16
 - **Related requirements:** `init.md` §8, §13, §15; matrix IDs CON-02, TST-11, ELIM-04/05/07, GAR-06/07, ENT-07
 

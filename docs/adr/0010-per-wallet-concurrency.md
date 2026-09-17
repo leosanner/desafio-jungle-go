@@ -1,6 +1,6 @@
 # 0010 — Per-wallet concurrency
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-09-15
 - **Related requirements:** `init.md` §6.2, §8; matrix IDs GAR-06, GAR-07, WAL-06, CON-01, ELIM-04, ELIM-07
 

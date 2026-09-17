@@ -1,6 +1,6 @@
 # 0017 — Inbox persistence in the financial unit of work
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-09-16
 - **Related requirements:** `init.md` §6.5, §10, §11; matrix IDs INB-01, INB-02, OBX-01, SQS-03, SQS-04, TST-12
 

@@ -1,6 +1,6 @@
 # 0008 — REFUND and ROLLBACK combinations
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-09-15
 - **Related requirements:** `init.md` §7; matrix IDs OPS-04..09, OPS-12, LED-03
 

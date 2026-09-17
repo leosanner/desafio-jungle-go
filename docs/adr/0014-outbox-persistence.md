@@ -1,6 +1,6 @@
 # 0014 — Outbox persistence without a publisher
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-09-16
 - **Related requirements:** `init.md` §9 (opening commit), §11; matrix IDs HTTP-01, OBX-01, OBX-05..08, ELIM-08, GAR-04
 

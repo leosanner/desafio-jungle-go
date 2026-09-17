@@ -1,6 +1,6 @@
 # 0015 — Outbox destination and routing
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-09-16
 - **Related requirements:** `init.md` §11; matrix IDs OBX-02, OBX-04, OBX-06, HTTP-13
 

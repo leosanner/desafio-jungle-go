@@ -1,6 +1,6 @@
 # 0016 — Outbox claim, lease, backoff and publish/ack recovery
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-09-16
 - **Related requirements:** `init.md` §11; matrix IDs OBX-02, OBX-03, TST-13, FX-03, ELIM-08, GAR-04
 

@@ -1,6 +1,6 @@
 # 0007 — WagerTransaction state machine
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-09-15
 - **Related requirements:** `init.md` §6.3, §7; matrix IDs WTX-02, WTX-05, WTX-06, OPS-10..13, DOM-01
 

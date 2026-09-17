@@ -1,6 +1,6 @@
 # 0021 — Observability: correlation logs and Prometheus metrics
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-09-16
 - **Related requirements:** `init.md` §12; matrix IDs OBS-01, OBS-02, OBS-03, HTTP-12
 

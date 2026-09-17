@@ -1,6 +1,6 @@
 # 0012 — Canonical idempotency hash
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-09-16
 - **Related requirements:** `init.md` §9 (hash, replay, conflict); matrix IDs HTTP-07, HTTP-08, HTTP-09, GAR-02, ELIM-06, SQS-02
 

@@ -1,6 +1,6 @@
 # 0018 — SQS inbound consume, retry, DLQ and shutdown
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-09-16
 - **Related requirements:** `init.md` §10; matrix IDs SQS-01..08, AUTH-06, FX-03/04, TST-05, TST-12, TST-16
 

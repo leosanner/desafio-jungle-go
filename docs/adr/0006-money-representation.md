@@ -1,6 +1,6 @@
 # 0006 — Money representation
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-09-15
 - **Related requirements:** `init.md` §6.1; matrix IDs MON-01..07, GAR-01, ELIM-03, STK-05 (representation; DB mapping intended)
 

@@ -1,6 +1,6 @@
 # 0013 — HTTP status and error-body mapping
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-09-16
 - **Related requirements:** `init.md` §9; matrix IDs HTTP-10, OPS-13, AUTH-04, ELIM-01, ELIM-02
 
