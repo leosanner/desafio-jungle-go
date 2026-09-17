@@ -23,7 +23,8 @@ hook is tests-only.
 Phase 8 pending tests (`TestPendingClaimSkipLocked`, `TestPendingRefundResolvesWhenBetArrives`,
 `TestPendingRefundExpiresReferenceNotFound`, `TestPendingCommittedPendingResumed`,
 `TestPendingTwoResumersOneRefund`) need `POSTGRES_DSN` only. TST-14/15 do not require SQS: inbound
-already deleted the message; the worker claims SQL rows.
+already deleted the message; the worker claims SQL rows. Operator procedure:
+[`pending-references.md`](pending-references.md).
 
 Phase 9 multi-instance tests (`TestInstances*` in `internal/composition`) need Postgres, Keycloak
 and LocalStack. They build `cmd/wagering` and start three OS processes ([ADR 0020](../adr/0020-multi-instance-and-failure-injection.md)).

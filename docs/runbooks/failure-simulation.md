@@ -43,6 +43,8 @@ kill -9 "$PID_OF_INSTANCE_A"
 
 ### After `PENDING_REFERENCE` (HTTP 202)
 
+Full operator procedure: [`pending-references.md`](pending-references.md).
+
 1. Open a wallet (100.00) on instance A.
 2. `POST` a `REFUND` that references a BET that does not exist yet → `202` / `PENDING_REFERENCE`.
 3. `kill -9` instance A immediately.

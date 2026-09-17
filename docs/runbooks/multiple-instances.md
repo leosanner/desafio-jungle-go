@@ -142,3 +142,4 @@ psql "$POSTGRES_DSN" -c "SELECT external_transaction_id, status, failure_code FR
 `INSUFFICIENT_FUNDS`.
 
 Failure injection (`kill -9`, stop Postgres/SQS): [`failure-simulation.md`](failure-simulation.md).
+Pending references: [`pending-references.md`](pending-references.md).

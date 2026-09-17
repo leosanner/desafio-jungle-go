@@ -36,7 +36,8 @@ reference is `REJECTED` / `FAILED`, the waiter is rejected with `REFERENCE_UNSUC
 ## Config
 
 `PENDING_POLL_INTERVAL`, `PENDING_BATCH_SIZE`, `PENDING_LEASE`, `PENDING_BACKOFF_MAX`,
-`PENDING_MAX_ATTEMPTS`, `PENDING_TTL`.
+`PENDING_MAX_ATTEMPTS`, `PENDING_TTL`. Operator procedure:
+[`docs/runbooks/pending-references.md`](../runbooks/pending-references.md).
 
 ## Shutdown
 

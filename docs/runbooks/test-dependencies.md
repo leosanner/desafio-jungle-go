@@ -10,7 +10,8 @@ PostgreSQL and `POSTGRES_DSN` only. Keycloak and SQS are not required for that s
 **TST-07** (OIDC against the real IdP) needs Keycloak with realm `wagering` imported and
 `OIDC_ISSUER` (host value in [`.env.example`](../../.env.example)). PostgreSQL is optional for the
 auth tests except the side-effect count in `TestAuthRealIdP`. Phase 6 outbox publish and Phase 7
-inbound consume also need LocalStack. Phase 8 pending-reference tests need PostgreSQL only.
+inbound consume also need LocalStack. Phase 8 pending-reference tests need PostgreSQL only
+([`pending-references.md`](pending-references.md)).
 Phase 9 `TestInstances*` needs PostgreSQL, Keycloak and LocalStack.
 
 ## Prerequisites
