@@ -1,18 +1,69 @@
-# tec-go — Distributed wager processing
+# Wagering
 
-Go + Uber Fx service that processes financial operations from game providers (`BET`, `WIN`, `LOSS`,
-`REFUND`, `ROLLBACK`) via HTTP and SQS, backed by PostgreSQL, Keycloak and LocalStack. Full
-challenge statement (in Portuguese) in [`init.md`](init.md). Decisions:
-[`ARCHITECTURE.md`](ARCHITECTURE.md).
+Solution to a take-home backend challenge: a **Go + Uber Fx** service that processes
+`BET`, `WIN`, `LOSS`, `REFUND` and `ROLLBACK` from game providers over HTTP and SQS, with
+several instances sharing PostgreSQL.
 
-From a clean checkout, another person can start the stack, apply migrations, call authenticated
-endpoints and run the documented tests (ENT-01).
+The original statement (Portuguese) is [`init.md`](init.md). Decisions, limitations and
+interpretations: [`ARCHITECTURE.md`](ARCHITECTURE.md). Requirement coverage:
+[`docs/requirements/traceability.md`](docs/requirements/traceability.md).
+
+This is a challenge deliverable, not production software. Credentials below and in
+[`.env.example`](.env.example) are **local dummies**.
+
+```mermaid
+flowchart LR
+  Providers -->|HTTP + JWT| App
+  Providers -->|SQS FIFO| App
+  Internal[Internal wallet service] -->|HTTP + JWT| App
+  App -->|OIDC| Keycloak
+  App -->|pgx| PostgreSQL
+  App -->|consume / publish| SQS
+```
+
+`App` is `cmd/wagering`. Several OS processes (or Compose replicas) can run against the same
+database: coordination is a per-wallet row lock, not a process-local mutex.
+
+## Design in brief
+
+| Guarantee | How |
+| --- | --- |
+| No floating-point money | `int64` minor units + ISO 4217; JSON `amount` is a string; PostgreSQL `BIGINT` |
+| Persistent idempotency | Unique `(provider_id, idempotency_key)` in PostgreSQL; replay returns the stored result |
+| Invariants in the database | `CHECK (balance_minor >= 0)`, uniqueness, append-only ledger trigger — independent of app locks and FIFO dedup |
+| Publish after commit | Transactional outbox in the same SQL transaction; publisher claims committed rows |
+| Auditable ledger | Insert-only entries; corrections are new rows |
+| Parallel wallets, no global lock | `SELECT … FOR UPDATE` on the wallet row; independent wallets proceed concurrently |
+| Authn / authz | Keycloak OIDC `client_credentials`; `providerId` from JWT `azp`; a provider sees only its own transactions |
+| At-least-once messaging | Transactional inbox; SQS delete after commit; DLQ after five receives; pending references resume from PostgreSQL |
+
+Optional extras **not** implemented: OpenTelemetry tracing, double-entry bookkeeping. An optional
+load burst ships as `go run ./cmd/loadtest` ([runbook](docs/runbooks/load-test.md)).
+
+## Quick start
+
+```sh
+docker compose up --build
+```
+
+Wait until the `app` container is healthy (`GET /health/ready` → `200`). Keycloak realm import
+can take a minute on first start.
+
+Then run the [example calls](#example-calls) against `http://localhost:8080` with tokens from
+`http://localhost:8081`. Unit tests (no Docker):
+
+```sh
+go test ./...
+go test -race ./...
+go vet ./...
+```
 
 ## Prerequisites
 
-- **Go 1.25+** (same version declared in `go.mod` and the Dockerfile)
+- **Go 1.25+** (version in `go.mod` and the Dockerfile)
 - **Docker** and **Docker Compose**
-- Optionally [golang-migrate](https://github.com/golang-migrate/migrate) CLI, only if you need to roll
+- **curl** and **python3** (JSON extraction in the copy-paste examples)
+- Optionally [golang-migrate](https://github.com/golang-migrate/migrate) CLI, only to roll
   migrations back by hand
 - Optionally the AWS CLI (or `awslocal` inside the LocalStack container) for manual SQS examples
 
@@ -21,12 +72,26 @@ endpoints and run the documented tests (ENT-01).
 Copy [`.env.example`](.env.example) and adjust. Do not commit real secrets. Values there are local
 dummies for a **host** process (`localhost` ports). Compose overrides them with service DNS names.
 
+### Process
+
 | Variable | Purpose |
 | --- | --- |
 | `LOG_LEVEL` | `log/slog` level (`debug`, `info`, `warn`, `error`) |
 | `HTTP_ADDR` | HTTP listen address (e.g. `:8080`) |
+| `FX_START_TIMEOUT` | Fx start timeout (Go duration, e.g. `15s`) |
+| `FX_STOP_TIMEOUT` | Fx stop timeout (Go duration, e.g. `30s`) |
+
+### PostgreSQL
+
+| Variable | Purpose |
+| --- | --- |
 | `POSTGRES_DSN` | PostgreSQL DSN for `pgx` (URL form recommended, e.g. `postgres://…`) |
 | `MIGRATIONS_PATH` | Directory of golang-migrate SQL files (typically `migrations`) |
+
+### AWS / SQS
+
+| Variable | Purpose |
+| --- | --- |
 | `AWS_REGION` | AWS region for SQS / LocalStack |
 | `AWS_ACCESS_KEY_ID` | Static access key (LocalStack accepts any non-empty dummy) |
 | `AWS_SECRET_ACCESS_KEY` | Static secret key (dummy for LocalStack) |
@@ -35,21 +100,34 @@ dummies for a **host** process (`localhost` ports). Compose overrides them with 
 | `SQS_WAGER_QUEUE_NAME` | FIFO queue name: `wager-transactions.fifo` |
 | `SQS_WAGER_DLQ_NAME` | FIFO DLQ name: `wager-transactions-dlq.fifo` |
 | `SQS_EVENTS_QUEUE_NAME` | Outbox destination FIFO: `wager-events.fifo` |
-| `FX_START_TIMEOUT` | Fx start timeout (Go duration, e.g. `15s`) |
-| `FX_STOP_TIMEOUT` | Fx stop timeout (Go duration, e.g. `30s`) |
+| `SQS_VISIBILITY_TIMEOUT` | Inbound message visibility / in-flight deadline (e.g. `30s`) |
+| `SQS_WAIT_TIME` | Receive long-poll wait (max `20s`) |
+| `SQS_BACKOFF_MAX` | Cap for inbound visibility backoff (e.g. `20s`) |
+
+### Outbox publisher
+
+| Variable | Purpose |
+| --- | --- |
 | `OUTBOX_POLL_INTERVAL` | Publisher poll interval (e.g. `250ms`) |
 | `OUTBOX_BATCH_SIZE` | Max unpublished rows claimed per tick (positive integer) |
 | `OUTBOX_LEASE` | Claim lease / in-flight publish deadline (e.g. `30s`) |
 | `OUTBOX_BACKOFF_MAX` | Cap for exponential publish retry backoff (e.g. `1m`) |
-| `SQS_VISIBILITY_TIMEOUT` | Inbound message visibility / in-flight deadline (e.g. `30s`) |
-| `SQS_WAIT_TIME` | Receive long-poll wait (max `20s`) |
-| `SQS_BACKOFF_MAX` | Cap for inbound visibility backoff (e.g. `20s`) |
-| `PENDING_POLL_INTERVAL` | Pending-reference worker poll interval (e.g. `250ms`) |
+
+### Pending-reference worker
+
+| Variable | Purpose |
+| --- | --- |
+| `PENDING_POLL_INTERVAL` | Worker poll interval (e.g. `250ms`) |
 | `PENDING_BATCH_SIZE` | Max `PENDING` / `PENDING_REFERENCE` rows claimed per tick |
 | `PENDING_LEASE` | Claim lease / in-flight resume deadline (e.g. `30s`) |
 | `PENDING_BACKOFF_MAX` | Cap for exponential pending retry backoff (e.g. `1m`) |
 | `PENDING_MAX_ATTEMPTS` | Max claim attempts before `REFERENCE_NOT_FOUND` |
 | `PENDING_TTL` | Max age from `created_at` before `REFERENCE_NOT_FOUND` |
+
+### OIDC
+
+| Variable | Purpose |
+| --- | --- |
 | `OIDC_ISSUER` | Expected JWT `iss` (Keycloak realm URL, no trailing slash) |
 | `OIDC_AUDIENCE` | Expected JWT `aud` (`wagering-api`) |
 | `OIDC_JWKS_URL` | Optional JWKS URL; defaults to `{OIDC_ISSUER}/protocol/openid-connect/certs` |
@@ -277,15 +355,18 @@ gofmt -l .
 Integration tests use build tag `integration`. They skip if required env is unset (`skip-if-no-env`).
 That skip is not a substitute for CI with real containers.
 
-**TST-04** (postgres migrations, constraints, ledger immutability, financial atomicity) and
-**HTTP use cases** (`TestHTTPPhase5UseCases`, concurrency) need `POSTGRES_DSN` only. **Outbox**
-(`TestOutbox*` in `internal/adapter/postgres`) needs `POSTGRES_DSN` plus LocalStack
-(`AWS_ENDPOINT_URL` and AWS dummy keys) for publish tests; claim/SKIP LOCKED tests need Postgres
-only. **Inbound** (`TestInbound*` in `internal/adapter/postgres`) needs `POSTGRES_DSN` and
-LocalStack. **Pending** (`TestPending*` in `internal/adapter/postgres`) needs `POSTGRES_DSN`
-only. **Multi-instance** (`TestInstances*` in `internal/composition`) needs Postgres,
-Keycloak and LocalStack (`POSTGRES_DSN`, `OIDC_ISSUER`, `AWS_ENDPOINT_URL`). **TST-07** (auth
-against the real IdP) needs Keycloak and `OIDC_ISSUER`:
+| What | Needs | Package hint |
+| --- | --- | --- |
+| Migrations, constraints, ledger immutability, financial atomicity | `POSTGRES_DSN` | `internal/adapter/postgres` |
+| HTTP use cases and concurrency | `POSTGRES_DSN` | `TestHTTPPhase5UseCases` and concurrency tests |
+| Outbox claim / `SKIP LOCKED` | `POSTGRES_DSN` | `TestOutbox*` claim tests |
+| Outbox publish | `POSTGRES_DSN` + LocalStack (`AWS_ENDPOINT_URL`) | `TestOutboxRelay*`, contend/recover |
+| Inbound consume, inbox, DLQ | `POSTGRES_DSN` + LocalStack | `TestInbound*` |
+| Pending-reference resume | `POSTGRES_DSN` | `TestPending*` |
+| Multi-instance (three OS processes) | `POSTGRES_DSN`, `OIDC_ISSUER`, LocalStack | `TestInstances*` in `internal/composition` |
+| Auth against the real IdP | Keycloak + `OIDC_ISSUER` | `TestAuthRealIdP`, `TestOIDCVerifierRealIdP` |
+
+Full tagged suite with Compose dependencies:
 
 ```sh
 docker compose up -d postgres keycloak localstack
@@ -305,6 +386,13 @@ dependencies: [`docs/runbooks/test-dependencies.md`](docs/runbooks/test-dependen
 
 ## Documentation
 
-- [`ARCHITECTURE.md`](ARCHITECTURE.md) — technical decisions, limitations, interpretations
-- [`docs/`](docs/) — ADRs, HTTP/event contracts, runbooks and the traceability matrix
-- [`.env.example`](.env.example) — local dummy values, no real secrets
+| Document | What it is |
+| --- | --- |
+| [`init.md`](init.md) | Challenge statement (Portuguese) |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | Decisions, limitations, interpretations |
+| [`docs/requirements/traceability.md`](docs/requirements/traceability.md) | Requirement → code / test / docs |
+| [`docs/adr/`](docs/adr/) | One accepted decision per file |
+| [`docs/api/`](docs/api/) | HTTP contracts, status codes, error bodies |
+| [`docs/events/`](docs/events/) | SQS inbound and outbox event contracts |
+| [`docs/runbooks/`](docs/runbooks/) | Integration, N instances, failures, pending references, load |
+| [`.env.example`](.env.example) | Local dummy values, no real secrets |
